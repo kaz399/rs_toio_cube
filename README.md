@@ -16,6 +16,17 @@ cd rs_toio_cube
 cargo run --example connect
 ```
 
+## Notice
+
+**Don't replace** the bluetooth driver to WinUSB.  
+[bleak](https://pypi.org/project/bleak/) uses .NET backend on Windows.  
+If you had replaced the bluetooth driver to WinUSB already, You have to revert to original driver. (WinUSB is required by [toio.js](https://github.com/toio/toio.js/))
+
+
+## Reference
+
+[toio Core Cube Specification](https://toio.github.io/toio-spec/)
+
 ## License
 
 3-Clause BSD License
