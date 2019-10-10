@@ -1,0 +1,11 @@
+[package]
+name = "ble_win10"
+version = "0.1.0"
+authors = ["yabe_z <Kazuhiro.Yabe@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.winrt]
+version = "0.6.0"
+features = ["windows-system", "windows-devices", "windows-storage"]
