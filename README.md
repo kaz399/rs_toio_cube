@@ -11,14 +11,14 @@ You pair toio core cube(s) with your PC before running this sample code.
 ### How to run
 
 ```
-git clone https://github.com/kaz399/rs_toio_cube.git 
-cd rs_toio_cube
+git clone https://github.com/kaz399/rs_toio_cube.git
+cd rs_toio_cube/ble_win10
 cargo run --example connect
 ```
 
 ## Notice
 
-**Don't replace** the bluetooth driver to WinUSB.   
+**Don't replace** the bluetooth driver to WinUSB.  
 If you had replaced the bluetooth driver to WinUSB already, You have to revert to original driver. (WinUSB is required by [toio.js](https://github.com/toio/toio.js/))
 
 
