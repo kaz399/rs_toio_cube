@@ -12,9 +12,9 @@ use winrt::*;
 
 fn button_handler(
     sender: *mut GattCharacteristic,
-    _arg: *mut GattValueChangedEventArgs,
+    arg: *mut GattValueChangedEventArgs,
 ) -> Result<()> {
-    println!("button status changed {:?}", sender);
+    println!("button status changed {:?} {:?}", sender, arg);
 
     Ok(())
 }
@@ -135,6 +135,7 @@ fn main() {
             println!("read failed");
         }
 
+        // check connection
         let connected = ble_device.get_connection_status().unwrap();
 
         if connected == BluetoothConnectionStatus::Connected {
@@ -154,7 +155,8 @@ fn main() {
         let handler =
             <TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>>::new(button_handler);
 
-        bt.add_value_changed(&handler).expect("error");
+        let token_button = bt.add_value_changed(&handler).expect("error");
+        println!("token {:?}", token_button);
 
         bt.write_client_characteristic_configuration_descriptor_async(
             GattClientCharacteristicConfigurationDescriptorValue::Notify,
@@ -162,6 +164,17 @@ fn main() {
         .unwrap()
         .blocking_get()
         .expect("failed");
+
+        thread::sleep(time::Duration::from_secs(6));
+
+        bt.write_client_characteristic_configuration_descriptor_async(
+            GattClientCharacteristicConfigurationDescriptorValue::None,
+        )
+        .unwrap()
+        .blocking_get()
+        .expect("failed");
+
+        bt.remove_value_changed(token_button).expect("error");
 
         // sound control
         let sound = service
