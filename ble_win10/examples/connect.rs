@@ -108,7 +108,8 @@ fn main() {
         let buffer = writer.detach_buffer().expect("error").unwrap();
 
         println!("start to write_value_async()");
-        let write_result = conf.write_value_async(&buffer)
+        let write_result = conf
+            .write_value_async(&buffer)
             .unwrap()
             .blocking_get()
             .expect("failed");
