@@ -139,6 +139,10 @@ impl CoreCubeBLE {
     }
 
     fn read(&self, characteristic_name: CoreCubeUuidName) -> std::result::Result<bool, String> {
+        let configuration = self.gatt_service
+            .get_characteristics(get_uuid(characteristic_name).unwrap())
+            .unwrap()
+            .unwrap();
         Ok(true)
     }
 

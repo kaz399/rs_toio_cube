@@ -107,17 +107,25 @@ fn main() {
         writer.write_bytes(&[0x01, 0x00]).expect("error");
         let buffer = writer.detach_buffer().expect("error").unwrap();
 
-        conf.write_value_async(&buffer)
+        println!("start to write_value_async()");
+        let write_result = conf.write_value_async(&buffer)
             .unwrap()
             .blocking_get()
             .expect("failed");
+        if write_result != GattCommunicationStatus::Success {
+            println!("failed: write_value_async()");
+            continue;
+        }
 
+        println!("start to read_value_with_cache_mode_async()");
         let read_result = conf
             .read_value_with_cache_mode_async(BluetoothCacheMode::Uncached)
             .unwrap()
             .blocking_get()
-            .expect("faild (read)")
+            .expect("failed: read_value_with_cache_mode_async()")
             .unwrap();
+
+        println!("start to get_status()");
 
         if read_result.get_status().unwrap() == GattCommunicationStatus::Success {
             println!("read success");
@@ -132,7 +140,8 @@ fn main() {
             reader.read_bytes(version.as_mut()).expect("error");
             println!("version: {:?} length:{}", version, read_length);
         } else {
-            println!("read failed");
+            println!("failed: get_status()");
+            continue;
         }
 
         // check connection
@@ -142,6 +151,7 @@ fn main() {
             println!("connected");
         } else {
             println!("not conencted");
+            continue;
         }
 
         // get notify
@@ -203,7 +213,7 @@ fn main() {
         println!("description: {}", mt.get_user_description().unwrap());
         let writer = DataWriter::new();
         writer
-            .write_bytes(&[0x02, 0x01, 0x01, 0x10, 0x02, 0x01, 0x10, 0x40])
+            .write_bytes(&[0x02, 0x01, 0x01, 0x64, 0x02, 0x02, 0x64, 0xff])
             .expect("error");
         let buffer = writer.detach_buffer().expect("error").unwrap();
         mt.write_value_async(&buffer)
