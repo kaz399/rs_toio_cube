@@ -1,9 +1,5 @@
 extern crate winrt;
 
-use std::collections::HashMap;
-use std::thread;
-use std::time;
-
 use winrt::windows::devices::bluetooth::genericattributeprofile::*;
 use winrt::windows::devices::bluetooth::*;
 use winrt::windows::devices::enumeration::*;
@@ -93,17 +89,42 @@ fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
     }
 }
 
+fn get_ble_devices() -> std::result::Result<Vec<HString>, String> {
+    let service_uuid = get_uuid(CoreCubeUuidName::Service).unwrap();
+
+    let selector = GattDeviceService::get_device_selector_from_uuid(service_uuid).unwrap();
+
+    let ref_selector = selector.make_reference();
+    println!("ref_selector: {}", ref_selector);
+
+    let collection = DeviceInformation::find_all_async_aqs_filter(&ref_selector)
+        .unwrap()
+        .blocking_get()
+        .expect("find_all_async failed")
+        .unwrap();
+
+    let mut uuid_list: Vec<HString> = Vec::new();
+    for device_info in collection.into_iter() {
+        uuid_list.push(match device_info {
+            Some(x) => x.get_id().unwrap(),
+            None => return Err("Error: get_id()".to_string()),
+        });
+    }
+
+    Ok(uuid_list)
+}
+
 struct CoreCubeBLE {
     name: String,
-    id: String,
-    ble_device: winrt::ComPtr<BluetoothLEDevice>,
-    gatt_service: winrt::ComPtr<GattDeviceService>,
+    ble_device: Option<winrt::ComPtr<BluetoothLEDevice>>,
+    gatt_service: Option<winrt::ComPtr<GattDeviceService>>,
 }
 
 impl CoreCubeBLE {
     fn connect(&mut self, ref_id: HStringReference) -> std::result::Result<bool, String> {
         // connect to device
-        self.ble_device = match BluetoothLEDevice::from_id_async(&ref_id)
+        println!("CONNECT");
+        let ble_device = match BluetoothLEDevice::from_id_async(&ref_id)
             .unwrap()
             .blocking_get()
         {
@@ -111,19 +132,22 @@ impl CoreCubeBLE {
             Err(_) => return Err("Error: from_id_async()".to_string()),
         };
 
-        self.gatt_service = match self
-            .ble_device
-            .get_gatt_service(get_uuid(CoreCubeUuidName::Service).unwrap())
-        {
-            Ok(service) => service.unwrap(),
-            Err(_) => return Err("Error: get_gatt_service()".to_string()),
-        };
+        println!("GATT");
+        self.gatt_service =
+            match ble_device.get_gatt_service(get_uuid(CoreCubeUuidName::Service).unwrap()) {
+                Ok(service) => Some(service.unwrap()),
+                Err(_) => return Err("Error: get_gatt_service()".to_string()),
+            };
+        self.ble_device = Some(ble_device);
+        println!("OK");
         Ok(true)
     }
 
     fn read(&self, characteristic_name: CoreCubeUuidName) -> std::result::Result<Vec<u8>, String> {
         let chr_list = self
             .gatt_service
+            .clone()
+            .unwrap()
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
@@ -167,6 +191,8 @@ impl CoreCubeBLE {
     ) -> std::result::Result<bool, String> {
         let chr_list = self
             .gatt_service
+            .clone()
+            .unwrap()
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
@@ -204,6 +230,8 @@ impl CoreCubeBLE {
     ) -> std::result::Result<EventRegistrationToken, String> {
         let chr_list = self
             .gatt_service
+            .clone()
+            .unwrap()
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
@@ -222,7 +250,7 @@ impl CoreCubeBLE {
         .blocking_get()
         .expect("failed");
 
-        Err("Error: failed to register notify".to_string())
+        Ok(token)
     }
 
     fn unregister_notify(
@@ -232,6 +260,8 @@ impl CoreCubeBLE {
     ) -> std::result::Result<bool, String> {
         let chr_list = self
             .gatt_service
+            .clone()
+            .unwrap()
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
@@ -255,8 +285,24 @@ impl CoreCubeBLE {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn it_works() {
+        let dev_list = get_ble_devices().unwrap();
+        assert_ne!(dev_list.len(), 0);
+        let device_info = dev_list[0].make_reference();
+        let mut cube = CoreCubeBLE {
+            name: "Cube1".to_string(),
+            ble_device: None,
+            gatt_service: None,
+        };
+        println!("connect to cube {}", dev_list[0]);
+        cube.connect(device_info);
+        cube.write(
+            CoreCubeUuidName::MotorCtrl,
+            &vec![0x02, 0x01, 0x01, 0x64, 0x02, 0x02, 0x64, 0xff],
+        );
         assert_eq!(2 + 2, 4);
     }
 }
