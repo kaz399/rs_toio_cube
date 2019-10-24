@@ -121,9 +121,16 @@ struct CoreCubeBLE {
 }
 
 impl CoreCubeBLE {
+    fn new(name: String) -> CoreCubeBLE {
+        CoreCubeBLE {
+            name: name,
+            ble_device: None,
+            gatt_service: None,
+        }
+    }
+
     fn connect(&mut self, ref_id: HStringReference) -> std::result::Result<bool, String> {
         // connect to device
-        println!("CONNECT");
         let ble_device = match BluetoothLEDevice::from_id_async(&ref_id)
             .unwrap()
             .blocking_get()
@@ -132,14 +139,13 @@ impl CoreCubeBLE {
             Err(_) => return Err("Error: from_id_async()".to_string()),
         };
 
-        println!("GATT");
         self.gatt_service =
             match ble_device.get_gatt_service(get_uuid(CoreCubeUuidName::Service).unwrap()) {
                 Ok(service) => Some(service.unwrap()),
                 Err(_) => return Err("Error: get_gatt_service()".to_string()),
             };
         self.ble_device = Some(ble_device);
-        println!("OK");
+
         Ok(true)
     }
 
@@ -214,10 +220,10 @@ impl CoreCubeBLE {
 
         if write_result != GattCommunicationStatus::Success {
             println!("failed: write_value_async()");
-            return Ok(true);
+            return Err("Error: write failed".to_string());
         }
 
-        Err("Error: write failed".to_string())
+        Ok(true)
     }
 
     fn register_norify(
@@ -292,17 +298,16 @@ mod tests {
         let dev_list = get_ble_devices().unwrap();
         assert_ne!(dev_list.len(), 0);
         let device_info = dev_list[0].make_reference();
-        let mut cube = CoreCubeBLE {
-            name: "Cube1".to_string(),
-            ble_device: None,
-            gatt_service: None,
-        };
-        println!("connect to cube {}", dev_list[0]);
-        cube.connect(device_info);
-        cube.write(
+
+        let mut cube = CoreCubeBLE::new("Cube1".to_string());
+        let result = cube.connect(device_info);
+        assert_eq!(result.unwrap(), true);
+
+        let result = cube.write(
             CoreCubeUuidName::MotorCtrl,
             &vec![0x02, 0x01, 0x01, 0x64, 0x02, 0x02, 0x64, 0xff],
         );
-        assert_eq!(2 + 2, 4);
+
+        assert_eq!(result.unwrap(), true);
     }
 }
