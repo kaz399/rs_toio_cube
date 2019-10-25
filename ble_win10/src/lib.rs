@@ -97,7 +97,7 @@ pub fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
     }
 }
 
-pub fn get_ble_devices() -> std::result::Result<Vec<HString>, String> {
+pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
     let service_uuid = get_uuid(CoreCubeUuidName::Service).unwrap();
 
     let selector = GattDeviceService::get_device_selector_from_uuid(service_uuid).unwrap();
@@ -111,10 +111,10 @@ pub fn get_ble_devices() -> std::result::Result<Vec<HString>, String> {
         .expect("find_all_async failed")
         .unwrap();
 
-    let mut uuid_list: Vec<HString> = Vec::new();
+    let mut uuid_list: Vec<String> = Vec::new();
     for device_info in collection.into_iter() {
         uuid_list.push(match device_info {
-            Some(x) => x.get_id().unwrap(),
+            Some(x) => x.get_id().unwrap().to_string(),
             None => return Err("Error: get_id()".to_string()),
         });
     }
@@ -137,7 +137,7 @@ impl Drop for CoreCubeBLE {
 pub trait CoreCubeBLEAccess {
     fn new(name: String) -> Self;
 
-    fn connect(&mut self, ref_id: HStringReference) -> std::result::Result<bool, String>;
+    fn connect(&mut self, ref_id: &String) -> std::result::Result<bool, String>;
 
     fn read(&self, characteristic_name: CoreCubeUuidName) -> std::result::Result<Vec<u8>, String>;
 
@@ -167,9 +167,10 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         }
     }
 
-    fn connect(&mut self, ref_id: HStringReference) -> std::result::Result<bool, String> {
+    fn connect(&mut self, ref_id: &String) -> std::result::Result<bool, String> {
         // connect to device
-        let ble_device = match BluetoothLEDevice::from_id_async(&ref_id)
+        let ref_id = HString::new(ref_id);
+        let ble_device = match BluetoothLEDevice::from_id_async(&ref_id.make_reference())
             .unwrap()
             .blocking_get()
         {
@@ -219,7 +220,6 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
                 read_result.push(0);
             }
             reader.read_bytes(read_result.as_mut()).expect("error");
-            println!("version: {:?} length:{}", read_result, read_length);
             return Ok(read_result);
         } else {
             println!("Error: read failed");
@@ -364,11 +364,14 @@ mod tests {
     fn it_works() {
         let dev_list = get_ble_devices().unwrap();
         assert_ne!(dev_list.len(), 0);
-        let device_info = dev_list[0].make_reference();
+        let device_info = &dev_list[0];
 
         let mut cube = CoreCubeBLE::new("Cube1".to_string());
         let result = cube.connect(device_info);
         assert_eq!(result.unwrap(), true);
+
+        let result = cube.read(CoreCubeUuidName::SensorInfo);
+        println!("{:?}", result.unwrap());
 
         let result = cube.write(
             CoreCubeUuidName::MotorCtrl,
