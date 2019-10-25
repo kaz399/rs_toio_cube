@@ -1,5 +1,7 @@
 extern crate winrt;
 
+use std::fmt::{self, Debug};
+
 use winrt::windows::devices::bluetooth::genericattributeprofile::*;
 use winrt::windows::devices::bluetooth::*;
 use winrt::windows::devices::enumeration::*;
@@ -8,7 +10,7 @@ use winrt::windows::storage::streams::*;
 use winrt::*;
 
 #[derive(Debug)]
-enum CoreCubeUuidName {
+pub enum CoreCubeUuidName {
     Service,
     IdInfo,
     SensorInfo,
@@ -20,7 +22,13 @@ enum CoreCubeUuidName {
     Configuration,
 }
 
-fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
+impl fmt::Display for CoreCubeUuidName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+pub fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
     match name {
         CoreCubeUuidName::Service => Some(Guid {
             // 10b20100-5b3b-4571-9508-cf 3e fc d7 bb ae
@@ -89,7 +97,7 @@ fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
     }
 }
 
-fn get_ble_devices() -> std::result::Result<Vec<HString>, String> {
+pub fn get_ble_devices() -> std::result::Result<Vec<HString>, String> {
     let service_uuid = get_uuid(CoreCubeUuidName::Service).unwrap();
 
     let selector = GattDeviceService::get_device_selector_from_uuid(service_uuid).unwrap();
@@ -114,14 +122,44 @@ fn get_ble_devices() -> std::result::Result<Vec<HString>, String> {
     Ok(uuid_list)
 }
 
-struct CoreCubeBLE {
+pub struct CoreCubeBLE {
     name: String,
     ble_device: Option<winrt::ComPtr<BluetoothLEDevice>>,
     gatt_service: Option<winrt::ComPtr<GattDeviceService>>,
 }
 
-impl CoreCubeBLE {
+impl Drop for CoreCubeBLE {
+    fn drop(&mut self) {
+        println!("Drop: CoreCubeBLE:{}", self.name);
+    }
+}
+
+pub trait CoreCubeBLEAccess {
+    fn new(name: String) -> Self;
+
+    fn connect(&mut self, ref_id: HStringReference) -> std::result::Result<bool, String>;
+
+    fn read(&self, characteristic_name: CoreCubeUuidName) -> std::result::Result<Vec<u8>, String>;
+
+    fn write(
+        &self,
+        characteristic_name: CoreCubeUuidName,
+        bytes: &Vec<u8>,
+    ) -> std::result::Result<bool, String>;
+
+    fn register_norify(
+        &self,
+        characteristic_name: CoreCubeUuidName,
+        handler_func: fn(
+            sender: *mut GattCharacteristic,
+            arg: *mut GattValueChangedEventArgs,
+        ) -> Result<()>,
+    ) -> std::result::Result<CoreCubeNotifyHandler, String>;
+}
+
+impl CoreCubeBLEAccess for CoreCubeBLE {
     fn new(name: String) -> CoreCubeBLE {
+        println!("Create CoreCubeBLE: {}", name);
         CoreCubeBLE {
             name: name,
             ble_device: None,
@@ -229,11 +267,12 @@ impl CoreCubeBLE {
     fn register_norify(
         &self,
         characteristic_name: CoreCubeUuidName,
-        handler: fn(
+        handler_func: fn(
             sender: *mut GattCharacteristic,
             arg: *mut GattValueChangedEventArgs,
         ) -> Result<()>,
-    ) -> std::result::Result<EventRegistrationToken, String> {
+    ) -> std::result::Result<CoreCubeNotifyHandler, String> {
+        let chr_name = characteristic_name.to_string();
         let chr_list = self
             .gatt_service
             .clone()
@@ -245,7 +284,7 @@ impl CoreCubeBLE {
         let chr = chr_list.get_at(0).expect("error: read").unwrap();
 
         let handler =
-            <TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>>::new(handler);
+            <TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>>::new(handler_func);
 
         let token = chr.add_value_changed(&handler).expect("error");
 
@@ -256,42 +295,70 @@ impl CoreCubeBLE {
         .blocking_get()
         .expect("failed");
 
-        Ok(token)
+        Ok(CoreCubeNotifyHandler {
+            name: format!("{}:{}", self.name, chr_name),
+            characteristic: chr,
+            token: token,
+        })
     }
+}
 
-    fn unregister_notify(
-        &self,
-        characteristic_name: CoreCubeUuidName,
-        token: EventRegistrationToken,
-    ) -> std::result::Result<bool, String> {
-        let chr_list = self
-            .gatt_service
-            .clone()
+pub struct CoreCubeNotifyHandler {
+    name: String,
+    characteristic: winrt::ComPtr<GattCharacteristic>,
+    token: EventRegistrationToken,
+}
+
+pub trait CoreCubeNotifyMethod {
+    fn unregister(&self) -> std::result::Result<bool, String>;
+}
+
+impl CoreCubeNotifyMethod for CoreCubeNotifyHandler {
+    fn unregister(&self) -> std::result::Result<bool, String> {
+        match self
+            .characteristic
+            .write_client_characteristic_configuration_descriptor_async(
+                GattClientCharacteristicConfigurationDescriptorValue::None,
+            )
             .unwrap()
-            .get_characteristics(get_uuid(characteristic_name).unwrap())
-            .unwrap()
-            .unwrap();
+            .blocking_get()
+        {
+            Ok(_) => (),
+            _ => {
+                return Err(
+                    "Error: write_client_characteristic_configuration_descriptor_async".to_string(),
+                )
+            }
+        }
 
-        let chr = chr_list.get_at(0).expect("error: read").unwrap();
-
-        chr.write_client_characteristic_configuration_descriptor_async(
-            GattClientCharacteristicConfigurationDescriptorValue::None,
-        )
-        .unwrap()
-        .blocking_get()
-        .expect("failed");
-
-        chr.remove_value_changed(token).expect("error");
+        match self.characteristic.remove_value_changed(self.token) {
+            Ok(_) => (),
+            _ => return Err("Error: remove_value_changed".to_string()),
+        }
 
         Ok(true)
     }
+}
 
-    fn disconnect(&self) {}
+impl Drop for CoreCubeNotifyHandler {
+    fn drop(&mut self) {
+        println!("Drop: CoreCubeNotifyHandler:{}", self.name);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
+    use std::time;
+
+    fn button_handler(
+        sender: *mut GattCharacteristic,
+        arg: *mut GattValueChangedEventArgs,
+    ) -> Result<()> {
+        println!("button status changed {:?} {:?}", sender, arg);
+        Ok(())
+    }
 
     #[test]
     fn it_works() {
@@ -307,7 +374,16 @@ mod tests {
             CoreCubeUuidName::MotorCtrl,
             &vec![0x02, 0x01, 0x01, 0x64, 0x02, 0x02, 0x64, 0xff],
         );
+        assert_eq!(result.unwrap(), true);
 
+        println!("Notify test");
+        let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_handler);
+        let notify_handler = result.unwrap();
+
+        println!("sleep2");
+        thread::sleep(time::Duration::from_secs(5));
+        println!("wake up");
+        let result = notify_handler.unregister();
         assert_eq!(result.unwrap(), true);
     }
 }
