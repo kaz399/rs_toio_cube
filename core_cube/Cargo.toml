@@ -1,5 +1,5 @@
 [package]
-name = "ble_win10"
+name = "core_cube"
 version = "0.1.0"
 authors = ["yabe_z <Kazuhiro.Yabe@gmail.com>"]
 edition = "2018"
