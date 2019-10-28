@@ -4,10 +4,11 @@ use std::time;
 use core_cube::win10::*;
 
 fn button_handler(
-    sender: *mut GattCharacteristic,
-    arg: *mut GattValueChangedEventArgs,
-) -> Result<()> {
-    println!("button status changed {:?} {:?}", sender, arg);
+    sender: *mut CoreCubeNotifySender,
+    arg: *mut CoreCubeNotifyArgs,
+) -> CoreCubeNotifyResult {
+    let data = get_notify_data(arg);
+    println!("button status changed {:?} {:?}", sender, data);
     Ok(())
 }
 

@@ -9,6 +9,10 @@ use winrt::windows::foundation::*;
 use winrt::windows::storage::streams::*;
 use winrt::*;
 
+pub type CoreCubeNotifySender = GattCharacteristic;
+pub type CoreCubeNotifyArgs = GattValueChangedEventArgs;
+pub type CoreCubeNotifyResult = Result<()>;
+
 #[derive(Debug)]
 pub enum CoreCubeUuidName {
     Service,
@@ -122,6 +126,29 @@ pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
     Ok(uuid_list)
 }
 
+pub fn get_notify_data(arg: *mut CoreCubeNotifyArgs) -> Vec<u8> {
+    let mut notify_data = Vec::<u8>::new();
+    unsafe {
+        let arg_ref = arg.as_ref().unwrap();
+        let arg_ibuffer = arg_ref
+            .get_characteristic_value()
+            .expect("error: get_characteristic_value")
+            .unwrap();
+
+        let reader = DataReader::from_buffer(&arg_ibuffer)
+            .expect("error")
+            .unwrap();
+
+        let read_length = reader.get_unconsumed_buffer_length().expect("error") as usize;
+
+        for _i in 0..read_length {
+            notify_data.push(0);
+        }
+        reader.read_bytes(notify_data.as_mut()).expect("error");
+    }
+    notify_data
+}
+
 pub struct CoreCubeBLE {
     name: String,
     ble_device: Option<winrt::ComPtr<BluetoothLEDevice>>,
@@ -151,9 +178,9 @@ pub trait CoreCubeBLEAccess {
         &self,
         characteristic_name: CoreCubeUuidName,
         handler_func: fn(
-            sender: *mut GattCharacteristic,
-            arg: *mut GattValueChangedEventArgs,
-        ) -> Result<()>,
+            *mut CoreCubeNotifySender,
+            *mut CoreCubeNotifyArgs,
+        ) -> CoreCubeNotifyResult,
     ) -> std::result::Result<CoreCubeNotifyHandler, String>;
 }
 
@@ -268,9 +295,9 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         &self,
         characteristic_name: CoreCubeUuidName,
         handler_func: fn(
-            sender: *mut GattCharacteristic,
-            arg: *mut GattValueChangedEventArgs,
-        ) -> Result<()>,
+            *mut CoreCubeNotifySender,
+            *mut CoreCubeNotifyArgs,
+        ) -> CoreCubeNotifyResult,
     ) -> std::result::Result<CoreCubeNotifyHandler, String> {
         let chr_name = characteristic_name.to_string();
         let chr_list = self
@@ -283,10 +310,12 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
 
         let chr = chr_list.get_at(0).expect("error: read").unwrap();
 
-        let handler =
-            <TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>>::new(handler_func);
+        let winrt_handler = TypedEventHandler::new(handler_func);
 
-        let token = chr.add_value_changed(&handler).expect("error");
+        let token = Some(
+            chr.add_value_changed(&winrt_handler.clone())
+                .expect("error"),
+        );
 
         chr.write_client_characteristic_configuration_descriptor_async(
             GattClientCharacteristicConfigurationDescriptorValue::Notify,
@@ -295,18 +324,22 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         .blocking_get()
         .expect("failed");
 
-        Ok(CoreCubeNotifyHandler {
-            name: format!("{}:{}", self.name, chr_name),
+        let handler = CoreCubeNotifyHandler {
+            name: self.name.clone(),
+            characteristic_name: chr_name.clone(),
             characteristic: chr,
             token: token,
-        })
+        };
+
+        Ok(handler)
     }
 }
 
 pub struct CoreCubeNotifyHandler {
     name: String,
+    characteristic_name: String,
     characteristic: winrt::ComPtr<GattCharacteristic>,
-    token: EventRegistrationToken,
+    token: Option<EventRegistrationToken>,
 }
 
 pub trait CoreCubeNotifyMethod {
@@ -331,10 +364,13 @@ impl CoreCubeNotifyMethod for CoreCubeNotifyHandler {
             }
         }
 
-        match self.characteristic.remove_value_changed(self.token) {
-            Ok(_) => (),
-            _ => return Err("Error: remove_value_changed".to_string()),
-        }
+        match self.token {
+            Some(x) => match self.characteristic.remove_value_changed(x) {
+                Ok(_) => (),
+                _ => return Err("Error: remove_value_changed".to_string()),
+            },
+            _ => return Err("Error: token is None".to_string()),
+        };
 
         Ok(true)
     }
@@ -342,7 +378,10 @@ impl CoreCubeNotifyMethod for CoreCubeNotifyHandler {
 
 impl Drop for CoreCubeNotifyHandler {
     fn drop(&mut self) {
-        println!("Drop: CoreCubeNotifyHandler:{}", self.name);
+        println!(
+            "Drop: CoreCubeNotifyHandler:{}:{}",
+            self.name, self.characteristic_name
+        );
     }
 }
 
@@ -353,10 +392,11 @@ mod tests {
     use std::time;
 
     fn button_handler(
-        sender: *mut GattCharacteristic,
-        arg: *mut GattValueChangedEventArgs,
-    ) -> Result<()> {
-        println!("button status changed {:?} {:?}", sender, arg);
+        sender: *mut CoreCubeNotifySender,
+        arg: *mut CoreCubeNotifyArgs,
+    ) -> CoreCubeNotifyResult {
+        let data = get_notify_data(arg);
+        println!("button status changed {:?} {:?}", sender, data);
         Ok(())
     }
 
