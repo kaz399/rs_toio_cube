@@ -3,12 +3,21 @@ use std::time;
 
 use core_cube::win10::*;
 
-fn button_handler(
-    sender: *mut CoreCubeNotifySender,
+fn button_notify(
+    _sender: *mut CoreCubeNotifySender,
     arg: *mut CoreCubeNotifyArgs,
 ) -> CoreCubeNotifyResult {
     let data = get_notify_data(arg);
-    println!("button status changed {:?} {:?}", sender, data);
+    println!("button status changed {:?}", data);
+    Ok(())
+}
+
+fn sensor_information_notify(
+    _sender: *mut CoreCubeNotifySender,
+    arg: *mut CoreCubeNotifyArgs,
+) -> CoreCubeNotifyResult {
+    let data = get_notify_data(arg);
+    println!("sensor information status changed {:?}", data);
     Ok(())
 }
 
@@ -31,13 +40,21 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     println!("Notify test");
-    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_handler);
-    let notify_handler = result.unwrap();
+    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_notify);
+    let button_handler = result.unwrap();
 
-    println!("sleep2");
-    thread::sleep(time::Duration::from_secs(5));
+    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify);
+    let sensor_handler = result.unwrap();
+
+    println!("sleep");
+    thread::sleep(time::Duration::from_secs(15));
     println!("wake up");
-    let result = notify_handler.unregister();
+
+    let result = button_handler.unregister();
     assert_eq!(result.unwrap(), true);
+
+    let result = sensor_handler.unregister();
+    assert_eq!(result.unwrap(), true);
+
     println!("Hello, world!");
 }
