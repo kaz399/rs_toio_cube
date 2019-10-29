@@ -13,4 +13,7 @@ log = "0.4.8"
 env_logger = "0.7.1"
 clap = "2.33.0"
 
+[[bin]]
+name = "cubekey"
+path = "src/cubekey.rs"
 
