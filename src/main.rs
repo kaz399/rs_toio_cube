@@ -1,3 +1,4 @@
+use clap::{App, Arg};
 use core_cube::win10::*;
 use ctrlc;
 use enigo::*;
@@ -9,8 +10,14 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 lazy_static! {
-    static ref KEY_CODE: RwLock<Key> = RwLock::new(Key::PageDown);
+    static ref KEY_TABLE_INDEX: RwLock<usize> = RwLock::new(0);
+    static ref KEY_CODE: RwLock<Key> = RwLock::new(Key::F5);
 }
+
+static KEY_TABLE: [[Key; 2]; 2] = [
+    [Key::PageUp, Key::PageDown],
+    [Key::LeftArrow, Key::RightArrow],
+];
 
 fn button_notify(
     _sender: *mut CoreCubeNotifySender,
@@ -35,27 +42,35 @@ fn sensor_information_notify(
     debug!("sensor information status changed {:?}", data);
     match data[1] {
         0x01 => {
+            let target_key: Key;
             let current_key: Key;
             {
+                let key_table_index = KEY_TABLE_INDEX.read().unwrap();
+                target_key = KEY_TABLE[*key_table_index][1];
+
                 let key_code = KEY_CODE.read().unwrap();
                 current_key = *key_code;
             }
-            if current_key != Key::PageDown {
-                info!("PageDown");
+            if current_key != target_key {
+                info!("{:?}", target_key);
                 let mut key_code = KEY_CODE.write().unwrap();
-                *key_code = Key::PageDown;
+                *key_code = target_key;
             }
         }
         _ => {
+            let target_key: Key;
             let current_key: Key;
             {
+                let key_table_index = KEY_TABLE_INDEX.read().unwrap();
+                target_key = KEY_TABLE[*key_table_index][0];
+
                 let key_code = KEY_CODE.read().unwrap();
                 current_key = *key_code;
             }
-            if current_key != Key::PageUp {
-                info!("PageUp");
+            if current_key != target_key {
+                info!("{:?}", target_key);
                 let mut key_code = KEY_CODE.write().unwrap();
-                *key_code = Key::PageUp;
+                *key_code = target_key;
             }
         }
     }
@@ -65,6 +80,18 @@ fn sensor_information_notify(
 
 fn main() {
     env_logger::init();
+    let app = App::new("cubekey")
+        .version("0.0.1")
+        .arg(Arg::with_name("lr").help("LR key mode").long("lr"));
+    let matches = app.get_matches();
+    if matches.is_present("lr") {
+        println!("LR key mode");
+        let mut key_table_index = KEY_TABLE_INDEX.write().unwrap();
+        *key_table_index = 1;
+    } else {
+        println!("Page key mode");
+    }
+
     let dev_list = get_ble_devices().unwrap();
     assert_ne!(dev_list.len(), 0);
 
