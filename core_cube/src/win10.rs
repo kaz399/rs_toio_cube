@@ -11,7 +11,7 @@ pub type CoreCubeNotifySender = GattCharacteristic;
 pub type CoreCubeNotifyArgs = GattValueChangedEventArgs;
 pub type CoreCubeNotifyResult = Result<()>;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum CoreCubeUuidName {
     Service,
     IdInfo,
