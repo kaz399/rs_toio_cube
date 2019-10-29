@@ -1,7 +1,5 @@
-extern crate winrt;
-
+use log::{debug, error};
 use std::fmt::{self, Debug};
-
 use winrt::windows::devices::bluetooth::genericattributeprofile::*;
 use winrt::windows::devices::bluetooth::*;
 use winrt::windows::devices::enumeration::*;
@@ -107,7 +105,7 @@ pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
     let selector = GattDeviceService::get_device_selector_from_uuid(service_uuid).unwrap();
 
     let ref_selector = selector.make_reference();
-    println!("ref_selector: {}", ref_selector);
+    debug!("ref_selector: {}", ref_selector);
 
     let collection = DeviceInformation::find_all_async_aqs_filter(&ref_selector)
         .unwrap()
@@ -157,7 +155,7 @@ pub struct CoreCubeBLE {
 
 impl Drop for CoreCubeBLE {
     fn drop(&mut self) {
-        println!("Drop: CoreCubeBLE:{}", self.name);
+        debug!("Drop: CoreCubeBLE:{}", self.name);
     }
 }
 
@@ -186,7 +184,7 @@ pub trait CoreCubeBLEAccess {
 
 impl CoreCubeBLEAccess for CoreCubeBLE {
     fn new(name: String) -> CoreCubeBLE {
-        println!("Create CoreCubeBLE: {}", name);
+        debug!("Create CoreCubeBLE: {}", name);
         CoreCubeBLE {
             name: name,
             ble_device: None,
@@ -234,7 +232,6 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .unwrap();
 
         if read_result.get_status().unwrap() == GattCommunicationStatus::Success {
-            println!("read success");
             let reader = DataReader::from_buffer(&read_result.get_value().unwrap().unwrap())
                 .expect("error")
                 .unwrap();
@@ -249,7 +246,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             reader.read_bytes(read_result.as_mut()).expect("error");
             return Ok(read_result);
         } else {
-            println!("Error: read failed");
+            error!("Error: read failed");
         }
 
         Err("Error: read".to_string())
@@ -276,7 +273,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
 
         let buffer = writer.detach_buffer().expect("error").unwrap();
 
-        println!("start to write_value_async()");
+        debug!("start to write_value_async()");
         let write_result = chr
             .write_value_async(&buffer)
             .unwrap()
@@ -284,7 +281,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .expect("failed");
 
         if write_result != GattCommunicationStatus::Success {
-            println!("failed: write_value_async()");
+            error!("failed: write_value_async()");
             return Err("Error: write failed".to_string());
         }
 
@@ -378,7 +375,7 @@ impl CoreCubeNotifyMethod for CoreCubeNotifyHandler {
 
 impl Drop for CoreCubeNotifyHandler {
     fn drop(&mut self) {
-        println!(
+        debug!(
             "Drop: CoreCubeNotifyHandler:{}:{}",
             self.name, self.characteristic_name
         );
