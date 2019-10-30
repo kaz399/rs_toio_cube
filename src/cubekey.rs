@@ -8,10 +8,13 @@ use log::{debug, error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::thread;
+use std::time;
 
 #[derive(Debug, Clone)]
 struct RequestFromHandler {
     name: String,
+    time: time::Instant,
     uuid: CoreCubeUuidName,
     data: Vec<u8>,
 }
@@ -26,7 +29,7 @@ enum KeyTableName {
 lazy_static! {
     static ref KEY_TABLE_INDEX: RwLock<KeyTableName> = RwLock::new(KeyTableName::Page);
     static ref KEY_CODE: RwLock<Key> = RwLock::new(Key::F5);
-    static ref PREV_PRESS_TIME: RwLock<Option<std::time::Instant>> = RwLock::new(None);
+    static ref PREV_PRESS_TIME: RwLock<Option<time::Instant>> = RwLock::new(None);
     static ref NOTIFY_RESULT: RwLock<Option<RequestFromHandler>> = RwLock::new(None);
 }
 
@@ -49,33 +52,36 @@ fn button_notify(
                 Some(x) => {
                     let elapsed_sec = x.elapsed().as_secs();
                     let elapsed_msec = x.elapsed().subsec_millis();
+                    let key_code: Key;
+
                     if (elapsed_sec >= 1) || (elapsed_msec >= 800) {
-                        info!("send keycode Key::Home");
-                        let mut engio = Enigo::new();
-                        engio.key_down(Key::Home);
+                        key_code = Key::Home;
 
                         let notify_result_data = RequestFromHandler {
                             name: "ButtonNotify".to_string(),
+                            time: time::Instant::now(),
                             uuid: CoreCubeUuidName::SoundCtrl,
                             data: vec![0x03, 0x01, 0x01, 0x05, 97, 0x80],
                         };
+                        debug!("get lock");
                         let mut notify_result = NOTIFY_RESULT.write().unwrap();
                         *notify_result = Some(notify_result_data);
+                        debug!("release lock");
+                    } else {
+                        key_code = *KEY_CODE.read().unwrap();
                     }
+                    let mut engio = Enigo::new();
+                    engio.key_down(key_code);
+                    info!("send keycode {:?}", key_code);
                 }
                 None => {
-                    *prev_press_time = Some(std::time::Instant::now());
+                    *prev_press_time = Some(time::Instant::now());
                 }
             }
         }
         0x80 => {
             let mut prev_press_time = PREV_PRESS_TIME.write().unwrap();
-            *prev_press_time = Some(std::time::Instant::now());
-
-            let mut enigo = Enigo::new();
-            let key_code = KEY_CODE.read().unwrap();
-            enigo.key_down(*key_code);
-            info!("send keycode {:?}", key_code);
+            *prev_press_time = Some(time::Instant::now());
         }
         _ => (),
     }
@@ -122,7 +128,6 @@ fn sensor_information_notify(
             }
         }
     }
-
     Ok(())
 }
 
@@ -188,19 +193,25 @@ fn main() {
     })
     .expect("Error setting Ctrl-C handler");
 
+    let tick = time::Duration::from_millis(50);
+
+    let mut last_request = time::Instant::now();
     while running.load(Ordering::SeqCst) {
-        let mut notify_result = NOTIFY_RESULT.write().unwrap();
-        match &*notify_result {
-            Some(request) => {
-                info!("Receive request {:?}", request);
-
-                let result = cube.write(request.uuid, &request.data);
-                assert_eq!(result.unwrap(), true);
-
-                *notify_result = None;
+        {
+            let notify_result = NOTIFY_RESULT.read().unwrap();
+            match &*notify_result {
+                Some(request) => {
+                    if request.time > last_request {
+                        info!("Receive request {:?}", request);
+                        last_request = request.time;
+                        let result = cube.write(request.uuid, &request.data);
+                        assert_eq!(result.unwrap(), true);
+                    }
+                }
+                _ => (),
             }
-            _ => (),
         }
+        thread::sleep(tick);
     }
 
     let result = cube.write(
