@@ -162,12 +162,16 @@ fn main() {
         let result = cube.connect(device_info);
         match result.unwrap() {
             true => (),
-            false => continue,
+            false => {
+                info!("search next cube");
+                continue;
+            }
         }
-        let result = cube.read(CoreCubeUuidName::SensorInfo);
+        let result = cube.read(CoreCubeUuidName::BatteryInfo);
         match result {
-            Ok(_) => {
+            Ok(v) => {
                 connected = true;
+                println!("battery level {}%", v[0]);
                 break;
             }
             Err(_) => continue,
