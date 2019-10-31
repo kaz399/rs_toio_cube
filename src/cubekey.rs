@@ -4,12 +4,10 @@ use ctrlc;
 use enigo::*;
 use env_logger;
 use lazy_static::lazy_static;
-use log::{debug, error, info};
+use log::{debug, info};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::thread;
-use std::time;
+use std::sync::{Arc, Mutex, RwLock};
+use std::{thread, time};
 
 #[derive(Debug, Clone)]
 struct RequestFromHandler {
@@ -30,7 +28,7 @@ lazy_static! {
     static ref KEY_TABLE_INDEX: RwLock<KeyTableName> = RwLock::new(KeyTableName::Page);
     static ref KEY_CODE: RwLock<Key> = RwLock::new(Key::F5);
     static ref PREV_PRESS_TIME: RwLock<Option<time::Instant>> = RwLock::new(None);
-    static ref NOTIFY_RESULT: RwLock<Option<RequestFromHandler>> = RwLock::new(None);
+    static ref NOTIFY_RESULT: Mutex<Vec<RequestFromHandler>> = Mutex::new(Vec::new());
 }
 
 static KEY_TABLE: [[Key; 2]; 3] = [
@@ -64,8 +62,8 @@ fn button_notify(
                             data: vec![0x03, 0x01, 0x01, 0x05, 97, 0x80],
                         };
                         debug!("get lock");
-                        let mut notify_result = NOTIFY_RESULT.write().unwrap();
-                        *notify_result = Some(notify_result_data);
+                        let mut notify_result = NOTIFY_RESULT.lock().unwrap();
+                        (*notify_result).push(notify_result_data.clone());
                         debug!("release lock");
                     } else {
                         key_code = *KEY_CODE.read().unwrap();
@@ -152,35 +150,35 @@ fn main() {
         *key_table_index = KeyTableName::Page;
     }
 
-    let dev_list = get_ble_devices().unwrap();
-    assert_ne!(dev_list.len(), 0);
-
     let mut cube = CoreCubeBLE::new("Cube1".to_string());
     let mut connected = false;
-    for device_info in &dev_list {
-        info!("Searching cube: {:?}", device_info);
-        let result = cube.connect(device_info);
-        match result.unwrap() {
-            true => (),
-            false => {
-                info!("search next cube");
-                continue;
-            }
-        }
-        let result = cube.read(CoreCubeUuidName::BatteryInfo);
-        match result {
-            Ok(v) => {
-                connected = true;
-                println!("battery level {}%", v[0]);
-                break;
-            }
-            Err(_) => continue,
-        }
-    }
 
-    if connected == false {
-        error!("No cubes!");
-        return;
+    while connected == false {
+        println!("search registered cubes");
+        let dev_list = get_ble_devices().unwrap();
+        assert_ne!(dev_list.len(), 0);
+
+        for device_info in &dev_list {
+            info!("Searching cube: {:?}", device_info);
+            let result = cube.connect(device_info);
+            match result.unwrap() {
+                true => {
+                    let result = cube.read(CoreCubeUuidName::BatteryInfo);
+                    match result {
+                        Ok(v) => {
+                            connected = true;
+                            println!("battery level {}%", v[0]);
+                            break;
+                        }
+                        Err(_) => continue,
+                    }
+                }
+                false => {
+                    info!("search next cube");
+                    continue;
+                }
+            }
+        }
     }
 
     let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_notify);
@@ -201,19 +199,19 @@ fn main() {
 
     let mut last_request = time::Instant::now();
     while running.load(Ordering::SeqCst) {
+        // ensure lock term
         {
-            let notify_result = NOTIFY_RESULT.read().unwrap();
-            match &*notify_result {
-                Some(request) => {
-                    if request.time > last_request {
-                        info!("Receive request {:?}", request);
-                        last_request = request.time;
-                        let result = cube.write(request.uuid, &request.data);
-                        assert_eq!(result.unwrap(), true);
-                    }
+            let mut notify_result = NOTIFY_RESULT.lock().unwrap();
+            let requests = &*notify_result;
+            for request in requests {
+                if request.time > last_request {
+                    info!("Receive request {:?}", request);
+                    last_request = request.time;
+                    let result = cube.write(request.uuid, &request.data);
+                    assert_eq!(result.unwrap(), true);
                 }
-                _ => (),
             }
+            (*notify_result).clear();
         }
         thread::sleep(tick);
     }
