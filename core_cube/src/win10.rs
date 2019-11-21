@@ -1,5 +1,8 @@
-use log::{debug, error};
+use log::{debug, error, info};
 use std::fmt::{self, Debug};
+use std::sync::mpsc;
+use std::time;
+use winrt::windows::devices::bluetooth::advertisement::*;
 use winrt::windows::devices::bluetooth::genericattributeprofile::*;
 use winrt::windows::devices::bluetooth::*;
 use winrt::windows::devices::enumeration::*;
@@ -124,6 +127,55 @@ pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
     Ok(uuid_list)
 }
 
+pub fn get_ble_device_from_address(address: u64) -> std::result::Result<Vec<u64>, String> {
+    info!("search with address");
+    let watcher = BluetoothLEAdvertisementWatcher::new();
+    let (tx, rx) = mpsc::channel();
+    let received_handler = TypedEventHandler::new(
+        move |_sender: *mut BluetoothLEAdvertisementWatcher,
+              dev_info: *mut BluetoothLEAdvertisementReceivedEventArgs|
+              -> Result<()> {
+            unsafe {
+                let ref_dev = dev_info.as_ref().unwrap();
+                let dev_adrs = ref_dev.get_bluetooth_address().unwrap();
+                info!("ble address:{:16x}", address);
+                if dev_adrs == address {
+                    tx.send(true).unwrap();
+                } else {
+                    tx.send(false).unwrap();
+                }
+            }
+            Ok(())
+        },
+    );
+
+    let mut found = false;
+    let mut adrs_list: Vec<u64> = Vec::new();
+
+    info!("start watcher");
+    let start_time = time::Instant::now();
+    watcher.add_received(&received_handler).unwrap();
+    watcher.start().unwrap();
+    while found == false
+        && time::Instant::now().duration_since(start_time) < time::Duration::from_secs(5)
+    {
+        let tf = match rx.try_recv() {
+            Ok(x) => x,
+            Err(_) => continue,
+        };
+        if tf == true {
+            found = true;
+            adrs_list.push(address);
+        }
+    }
+    //thread::sleep(time::Duration::from_secs(5));
+    info!("stop watcher");
+    watcher.stop().unwrap();
+
+    info!("device found {}", found);
+    Ok(adrs_list)
+}
+
 pub fn get_notify_data(arg: *mut CoreCubeNotifyArgs) -> Vec<u8> {
     let mut notify_data = Vec::<u8>::new();
     unsafe {
@@ -162,8 +214,8 @@ impl Drop for CoreCubeBLE {
 pub trait CoreCubeBLEAccess {
     fn new(name: String) -> Self;
 
-    fn connect(&mut self, ref_id: &String) -> std::result::Result<bool, String>;
-
+    fn connect_ref_id(&mut self, ref_id: &String) -> std::result::Result<bool, String>;
+    fn connect(&mut self, address: u64) -> std::result::Result<bool, String>;
     fn read(&self, characteristic_name: CoreCubeUuidName) -> std::result::Result<Vec<u8>, String>;
 
     fn write(
@@ -192,7 +244,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         }
     }
 
-    fn connect(&mut self, ref_id: &String) -> std::result::Result<bool, String> {
+    fn connect_ref_id(&mut self, ref_id: &String) -> std::result::Result<bool, String> {
         // connect to device
         let ref_id = HString::new(ref_id);
         let ble_device = match BluetoothLEDevice::from_id_async(&ref_id.make_reference())
@@ -210,6 +262,55 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             };
         self.ble_device = Some(ble_device);
 
+        Ok(true)
+    }
+
+    fn connect(&mut self, address: u64) -> std::result::Result<bool, String> {
+        // connect to device
+        info!("search with address");
+        let ble_device: ComPtr<BluetoothLEDevice>;
+        let ble_device_async = BluetoothLEDevice::from_bluetooth_address_async(address).unwrap();
+        ble_device = match ble_device_async.blocking_get() {
+            Ok(bdev) => bdev.unwrap(),
+            Err(_) => return Err("Error: from_id_async()".to_string()),
+        };
+        debug!("using IBluetoothLEDevice3 interface");
+        let ble_dev3 = ble_device.query_interface::<IBluetoothLEDevice3>().unwrap();
+        let gatt_services = match ble_dev3
+            .get_gatt_services_for_uuid_async(get_uuid(CoreCubeUuidName::Service).unwrap())
+            .unwrap()
+            .blocking_get()
+            .unwrap()
+        {
+            Some(s) => s.get_services().unwrap().unwrap(),
+            None => {
+                error!("error: get_gatt_services_async()");
+                return Err("Error: get_gatt_service_async()".to_string());
+            }
+        };
+
+        //thread::sleep(time::Duration::from_secs(3));
+        self.gatt_service = match gatt_services.get_at(0) {
+            Ok(service) => Some(service.unwrap()),
+            Err(_) => return Err("Error: from_id_async()".to_string()),
+        };
+        self.ble_device = Some(ble_device);
+
+        let gatt3 = self
+            .gatt_service
+            .clone()
+            .unwrap()
+            .query_interface::<IGattDeviceService3>()
+            .unwrap();
+
+        //dummy access
+        let _chars = gatt3
+            .get_characteristics_async()
+            .unwrap()
+            .blocking_get()
+            .unwrap();
+
+        debug!("complete");
         Ok(true)
     }
 
