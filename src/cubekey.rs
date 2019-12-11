@@ -453,6 +453,7 @@ fn main() {
     }
     debug!("key table {:?}", key_table);
 
+    // connect
     let cube: CoreCubeBLE;
     if let Some(adrs_str) = matches.value_of("address") {
         let mut adrs = adrs_str.to_string();
@@ -482,6 +483,13 @@ fn main() {
             }
         }
     }
+
+    // LED on (green)
+    let result = cube.write(
+        CoreCubeUuidName::LightCtrl,
+        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
+    );
+    assert_eq!(result.unwrap(), true);
 
     // Set collision detection level: Level 10
     let result = cube.write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
@@ -574,6 +582,13 @@ fn main() {
         }
         thread::sleep(tick);
     }
+
+    // LED off
+    let result = cube.write(
+        CoreCubeUuidName::LightCtrl,
+        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00],
+    );
+    assert_eq!(result.unwrap(), true);
 
     let result = cube.write(
         CoreCubeUuidName::SoundCtrl,
