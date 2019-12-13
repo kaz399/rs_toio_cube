@@ -154,7 +154,7 @@ fn main() {
     let mut connected = false;
     for device_info in &dev_list {
         info!("Searching cube: {:?}", device_info);
-        let result = cube.connect(device_info);
+        let result = cube.connect_ref_id(device_info);
         match result.unwrap() {
             true => (),
             false => continue,
