@@ -104,9 +104,7 @@ pub fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
 
 pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
     let service_uuid = get_uuid(CoreCubeUuidName::Service).unwrap();
-
     let selector = GattDeviceService::get_device_selector_from_uuid(service_uuid).unwrap();
-
     let ref_selector = selector.make_reference();
     debug!("ref_selector: {}", ref_selector);
 
@@ -322,9 +320,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
-
         let chr = chr_list.get_at(0).expect("error: read").unwrap();
-
         let read_result = chr
             .read_value_with_cache_mode_async(BluetoothCacheMode::Uncached)
             .unwrap()
@@ -365,15 +361,10 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
-
         let chr = chr_list.get_at(0).expect("error: read").unwrap();
-
         let writer = DataWriter::new();
-
         writer.write_bytes(bytes).expect("error");
-
         let buffer = writer.detach_buffer().expect("error").unwrap();
-
         debug!("start to write_value_async()");
         let write_result = chr
             .write_value_async(&buffer)
@@ -405,16 +396,12 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .get_characteristics(get_uuid(characteristic_name).unwrap())
             .unwrap()
             .unwrap();
-
         let chr = chr_list.get_at(0).expect("error: read").unwrap();
-
         let winrt_handler = TypedEventHandler::new(handler_func);
-
         let token = Some(
             chr.add_value_changed(&winrt_handler.clone())
                 .expect("error"),
         );
-
         chr.write_client_characteristic_configuration_descriptor_async(
             GattClientCharacteristicConfigurationDescriptorValue::Notify,
         )
