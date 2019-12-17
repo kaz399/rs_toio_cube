@@ -215,11 +215,6 @@ fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
     loop {
         let mut cube = CoreCubeBLE::new("Cube1".to_string());
         println!("search registered cubes");
-        let adrs_list = get_ble_device_from_address(address).unwrap();
-        if adrs_list.len() == 0 {
-            return Err("failed to conenct".to_string());
-        }
-
         'connect_again: loop {
             let result = cube.connect(address);
             match result.unwrap() {
@@ -274,7 +269,10 @@ fn get_button_info_list(duration: time::Duration) -> Vec<ButtonInfo> {
     button_info_list
 }
 
-static KEY_TABLE: [[Key; 7]; 3] = [
+const CUBE_POSTURES: usize = 7;
+const TABLE_TYPES: usize = 3;
+
+static KEY_TABLE: [[Key; CUBE_POSTURES]; TABLE_TYPES] = [
     [
         Key::Escape,
         Key::PageUp,
