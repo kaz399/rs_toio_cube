@@ -12,8 +12,8 @@ You pair toio core cube(s) with your PC before running this sample code.
 
 ```
 git clone https://github.com/kaz399/rs_toio_cube.git
-cd rs_toio_cube/core_cube
-cargo test
+cargo build
+cargo run
 ```
 
 ## Notice
