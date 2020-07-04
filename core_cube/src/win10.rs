@@ -254,7 +254,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .get()
         {
             Ok(bdev) => bdev,
-            Err(_) => return Err("Error: from_id_async()".to_string()),
+            Err(x) => return Err(x.message()),
         };
 
         for gatt_service in ble_device.gatt_services().unwrap() {
