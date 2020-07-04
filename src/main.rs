@@ -98,8 +98,8 @@ lazy_static! {
 
 // Button Notify Handler
 fn button_notify(
-    _sender: *mut CoreCubeNotifySender,
-    arg: *mut CoreCubeNotifyArgs,
+    _sender: &CoreCubeNotifySender,
+    arg: &CoreCubeNotifyArgs,
 ) -> CoreCubeNotifyResult {
     let data = get_notify_data(arg);
     debug!("button status changed {:?}", data);
@@ -120,8 +120,8 @@ fn button_notify(
 
 // Sensor Notify Hander
 fn sensor_information_notify(
-    _sender: *mut CoreCubeNotifySender,
-    arg: *mut CoreCubeNotifyArgs,
+    _sender: &CoreCubeNotifySender,
+    arg: &CoreCubeNotifyArgs,
 ) -> CoreCubeNotifyResult {
     let data = get_notify_data(arg);
     debug!("sensor information status changed {:?}", data);
@@ -162,8 +162,8 @@ fn sensor_information_notify(
 
 // ID Information Notify Handler
 fn id_information_notify(
-    _sender: *mut CoreCubeNotifySender,
-    arg: *mut CoreCubeNotifyArgs,
+    _sender: &CoreCubeNotifySender,
+    arg: &CoreCubeNotifyArgs,
 ) -> CoreCubeNotifyResult {
     let data = get_notify_data(arg);
     info!("id information status changed {:?}", data);

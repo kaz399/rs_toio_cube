@@ -1,16 +1,32 @@
+/* This is a test code */
+
 use log::{debug, error, info};
 use std::fmt::{self, Debug};
 use std::sync::mpsc;
 use std::time;
-use winrt::windows::devices::bluetooth::advertisement::*;
-use winrt::windows::devices::bluetooth::genericattributeprofile::*;
-use winrt::windows::devices::bluetooth::*;
-use winrt::windows::devices::enumeration::*;
-use winrt::windows::foundation::*;
-use winrt::windows::storage::streams::*;
 use winrt::*;
 
-pub type CoreCubeNotifySender = GattCharacteristic;
+// Now use the `import` macro to import the desired winmd files and types:
+import!(
+    dependencies
+      os
+    types
+      windows::devices::bluetooth::*
+      windows::devices::bluetooth::advertisement::*
+      windows::devices::bluetooth::generic_attribute_profile::*
+      windows::devices::enumeration::*
+      windows::foundation::*
+      windows::storage::streams::*
+);
+
+use windows::devices::bluetooth::advertisement::*;
+use windows::devices::bluetooth::generic_attribute_profile::*;
+use windows::devices::bluetooth::*;
+use windows::devices::enumeration::*;
+use windows::foundation::*;
+use windows::storage::streams::*;
+
+pub type CoreCubeNotifySender = generic_attribute_profile::GattCharacteristic;
 pub type CoreCubeNotifyArgs = GattValueChangedEventArgs;
 pub type CoreCubeNotifyResult = Result<()>;
 
@@ -35,91 +51,86 @@ impl fmt::Display for CoreCubeUuidName {
 
 pub fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
     match name {
-        CoreCubeUuidName::Service => Some(Guid {
+        CoreCubeUuidName::Service => Some(Guid::from_values(
             // 10b20100-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20100,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::IdInfo => Some(Guid {
+            0x10b20100,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::IdInfo => Some(Guid::from_values(
             // 10b20101-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20101,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::SensorInfo => Some(Guid {
+            0x10b20101,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::SensorInfo => Some(Guid::from_values(
             // 10b20106-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20106,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::ButtonInfo => Some(Guid {
+            0x10b20106,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::ButtonInfo => Some(Guid::from_values(
             // 10b20107-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20107,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
+            0x10b20107,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
         // Characteristic: Battery information
-        CoreCubeUuidName::BatteryInfo => Some(Guid {
+        CoreCubeUuidName::BatteryInfo => Some(Guid::from_values(
             // 10b20108-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20108,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::MotorCtrl => Some(Guid {
+            0x10b20108,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::MotorCtrl => Some(Guid::from_values(
             // 10b20102-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20102,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::LightCtrl => Some(Guid {
+            0x10b20102,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::LightCtrl => Some(Guid::from_values(
             // 10b20103-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20103,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::SoundCtrl => Some(Guid {
+            0x10b20103,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::SoundCtrl => Some(Guid::from_values(
             // 10b20104-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b20104,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
-        CoreCubeUuidName::Configuration => Some(Guid {
+            0x10b20104,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
+        CoreCubeUuidName::Configuration => Some(Guid::from_values(
             // 10b201ff-5b3b-4571-9508-cf 3e fc d7 bb ae
-            Data1: 0x10b201ff,
-            Data2: 0x5b3b,
-            Data3: 0x4571,
-            Data4: [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
-        }),
+            0x10b201ff,
+            0x5b3b,
+            0x4571,
+            [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
+        )),
     }
 }
 
 pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
     let service_uuid = get_uuid(CoreCubeUuidName::Service).unwrap();
     let selector = GattDeviceService::get_device_selector_from_uuid(service_uuid).unwrap();
-    let ref_selector = selector.make_reference();
-    debug!("ref_selector: {}", ref_selector);
+    debug!("ref_selector: {}", selector);
 
-    let collection = DeviceInformation::find_all_async_aqs_filter(&ref_selector)
+    let collection = DeviceInformation::find_all_async_aqs_filter(&selector)
         .unwrap()
-        .blocking_get()
-        .expect("find_all_async failed")
-        .unwrap();
+        .get()
+        .expect("find_all_async failed");
 
     let mut uuid_list: Vec<String> = Vec::new();
     for device_info in collection.into_iter() {
-        uuid_list.push(match device_info {
-            Some(x) => x.get_id().unwrap().to_string(),
-            None => return Err("Error: get_id()".to_string()),
-        });
+        uuid_list.push(device_info.name().unwrap().to_string());
     }
 
     Ok(uuid_list)
@@ -127,21 +138,18 @@ pub fn get_ble_devices() -> std::result::Result<Vec<String>, String> {
 
 pub fn get_ble_device_from_address(address: u64) -> std::result::Result<Vec<u64>, String> {
     info!("search with address");
-    let watcher = BluetoothLEAdvertisementWatcher::new();
+    let watcher = BluetoothLEAdvertisementWatcher::new().unwrap();
     let (tx, rx) = mpsc::channel();
     let received_handler = TypedEventHandler::new(
-        move |_sender: *mut BluetoothLEAdvertisementWatcher,
-              dev_info: *mut BluetoothLEAdvertisementReceivedEventArgs|
-              -> Result<()> {
-            unsafe {
-                let ref_dev = dev_info.as_ref().unwrap();
-                let dev_adrs = ref_dev.get_bluetooth_address().unwrap();
-                info!("ble address:{:16x}", address);
-                if dev_adrs == address {
-                    tx.send(true).unwrap();
-                } else {
-                    tx.send(false).unwrap();
-                }
+        move |_sender: &BluetoothLEAdvertisementWatcher,
+        dev_info: &BluetoothLEAdvertisementReceivedEventArgs|
+        -> Result<()> {
+            let dev_adrs = dev_info.bluetooth_address().unwrap();
+            info!("ble address:{:16x}", address);
+            if dev_adrs == address {
+                tx.send(true).unwrap();
+            } else {
+                tx.send(false).unwrap();
             }
             Ok(())
         },
@@ -152,7 +160,8 @@ pub fn get_ble_device_from_address(address: u64) -> std::result::Result<Vec<u64>
 
     info!("start watcher");
     let start_time = time::Instant::now();
-    watcher.add_received(&received_handler).unwrap();
+    watcher.received(&received_handler).unwrap();
+    //watcher.add_received(&received_handler).unwrap();
     watcher.start().unwrap();
     while found == false
         && time::Instant::now().duration_since(start_time) < time::Duration::from_secs(5)
@@ -174,33 +183,28 @@ pub fn get_ble_device_from_address(address: u64) -> std::result::Result<Vec<u64>
     Ok(adrs_list)
 }
 
-pub fn get_notify_data(arg: *mut CoreCubeNotifyArgs) -> Vec<u8> {
+pub fn get_notify_data(arg: &CoreCubeNotifyArgs) -> Vec<u8> {
     let mut notify_data = Vec::<u8>::new();
-    unsafe {
-        let arg_ref = arg.as_ref().unwrap();
-        let arg_ibuffer = arg_ref
-            .get_characteristic_value()
-            .expect("error: get_characteristic_value")
-            .unwrap();
+    let arg_ibuffer = arg
+        .characteristic_value()
+        .expect("error: get_characteristic_value");
 
-        let reader = DataReader::from_buffer(&arg_ibuffer)
-            .expect("error")
-            .unwrap();
+    let reader = DataReader::from_buffer(&arg_ibuffer)
+        .expect("error");
 
-        let read_length = reader.get_unconsumed_buffer_length().expect("error") as usize;
+    let read_length = reader.unconsumed_buffer_length().expect("error") as usize;
 
-        for _i in 0..read_length {
-            notify_data.push(0);
-        }
-        reader.read_bytes(notify_data.as_mut()).expect("error");
+    for _i in 0..read_length {
+        notify_data.push(0);
     }
+    reader.read_bytes(notify_data.as_mut()).expect("error");
     notify_data
 }
 
 pub struct CoreCubeBLE {
     name: String,
-    ble_device: Option<winrt::ComPtr<BluetoothLEDevice>>,
-    gatt_service: Option<winrt::ComPtr<GattDeviceService>>,
+    ble_device: Option<BluetoothLEDevice>,
+    gatt_service: Option<GattDeviceService>,
 }
 
 impl Drop for CoreCubeBLE {
@@ -226,8 +230,8 @@ pub trait CoreCubeBLEAccess {
         &self,
         characteristic_name: CoreCubeUuidName,
         handler_func: fn(
-            *mut CoreCubeNotifySender,
-            *mut CoreCubeNotifyArgs,
+            &CoreCubeNotifySender,
+            &CoreCubeNotifyArgs,
         ) -> CoreCubeNotifyResult,
     ) -> std::result::Result<CoreCubeNotifyHandler, String>;
 }
@@ -244,20 +248,24 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
 
     fn connect_ref_id(&mut self, ref_id: &String) -> std::result::Result<bool, String> {
         // connect to device
-        let ref_id = HString::new(ref_id);
-        let ble_device = match BluetoothLEDevice::from_id_async(&ref_id.make_reference())
+        let ref_id = HString::from(ref_id);
+        let ble_device = match BluetoothLEDevice::from_id_async(&ref_id)
             .unwrap()
-            .blocking_get()
+            .get()
         {
-            Ok(bdev) => bdev.unwrap(),
+            Ok(bdev) => bdev,
             Err(_) => return Err("Error: from_id_async()".to_string()),
         };
 
-        self.gatt_service =
-            match ble_device.get_gatt_service(get_uuid(CoreCubeUuidName::Service).unwrap()) {
-                Ok(service) => Some(service.unwrap()),
-                Err(_) => return Err("Error: get_gatt_service()".to_string()),
-            };
+        for gatt_service in ble_device.gatt_services().unwrap() {
+            if gatt_service.uuid().unwrap() == get_uuid(CoreCubeUuidName::Service).unwrap() {
+                self.gatt_service = Some(gatt_service);
+            }
+        }
+
+        if self.gatt_service == None {
+            return Err("Error: get_gatt_service()".to_string());
+        }
         self.ble_device = Some(ble_device);
 
         Ok(true)
@@ -266,46 +274,38 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
     fn connect(&mut self, address: u64) -> std::result::Result<bool, String> {
         // connect to device
         info!("search with address");
-        let ble_device: ComPtr<BluetoothLEDevice>;
+        let ble_device: BluetoothLEDevice;
         let ble_device_async = BluetoothLEDevice::from_bluetooth_address_async(address).unwrap();
-        ble_device = match ble_device_async.blocking_get() {
-            Ok(bdev) => bdev.unwrap(),
+        ble_device = match ble_device_async.get() {
+            Ok(bdev) => bdev,
             Err(_) => return Err("Error: from_id_async()".to_string()),
         };
         debug!("using IBluetoothLEDevice3 interface");
-        let ble_dev3 = ble_device.query_interface::<IBluetoothLEDevice3>().unwrap();
-        let gatt_services = match ble_dev3
+        let gatt_services = match ble_device
             .get_gatt_services_for_uuid_async(get_uuid(CoreCubeUuidName::Service).unwrap())
             .unwrap()
-            .blocking_get()
-            .unwrap()
+            .get()
         {
-            Some(s) => s.get_services().unwrap().unwrap(),
-            None => {
+            Ok(s) => s,
+            Err(_) => {
                 error!("error: get_gatt_services_async()");
                 return Err("Error: get_gatt_service_async()".to_string());
             }
         };
 
         //thread::sleep(time::Duration::from_secs(3));
-        self.gatt_service = match gatt_services.get_at(0) {
-            Ok(service) => Some(service.unwrap()),
+        self.gatt_service = match gatt_services.services().unwrap().get_at(0) {
+            Ok(service) => Some(service),
             Err(_) => return Err("Error: from_id_async()".to_string()),
         };
         self.ble_device = Some(ble_device);
 
-        let gatt3 = self
-            .gatt_service
-            .clone()
-            .unwrap()
-            .query_interface::<IGattDeviceService3>()
-            .unwrap();
-
         //dummy access
-        let _chars = gatt3
+        let _chars = self.gatt_service.as_ref()
+            .unwrap()
             .get_characteristics_async()
             .unwrap()
-            .blocking_get()
+            .get()
             .unwrap();
 
         debug!("complete");
@@ -317,23 +317,22 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .gatt_service
             .clone()
             .unwrap()
-            .get_characteristics(get_uuid(characteristic_name).unwrap())
+            .get_characteristics_for_uuid_async(get_uuid(characteristic_name).unwrap())
             .unwrap()
+            .get()
             .unwrap();
-        let chr = chr_list.get_at(0).expect("error: read").unwrap();
+        let chr = chr_list.characteristics().unwrap().get_at(0).expect("error: read");
         let read_result = chr
             .read_value_with_cache_mode_async(BluetoothCacheMode::Uncached)
             .unwrap()
-            .blocking_get()
-            .expect("failed: read_value_with_cache_mode_async()")
-            .unwrap();
+            .get()
+            .expect("failed: read_value_with_cache_mode_async()");
 
-        if read_result.get_status().unwrap() == GattCommunicationStatus::Success {
-            let reader = DataReader::from_buffer(&read_result.get_value().unwrap().unwrap())
-                .expect("error")
-                .unwrap();
+        if read_result.status().unwrap() == GattCommunicationStatus::Success {
+            let reader = DataReader::from_buffer(&read_result.value().unwrap())
+                .expect("error");
 
-            let read_length = reader.get_unconsumed_buffer_length().expect("error") as usize;
+            let read_length = reader.unconsumed_buffer_length().expect("error") as usize;
 
             let mut read_result = Vec::<u8>::with_capacity(read_length);
 
@@ -359,17 +358,16 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .clone()
             .unwrap()
             .get_characteristics(get_uuid(characteristic_name).unwrap())
-            .unwrap()
             .unwrap();
-        let chr = chr_list.get_at(0).expect("error: read").unwrap();
-        let writer = DataWriter::new();
+        let chr = chr_list.get_at(0).expect("error: read");
+        let writer = DataWriter::new().unwrap();
         writer.write_bytes(bytes).expect("error");
-        let buffer = writer.detach_buffer().expect("error").unwrap();
+        let buffer = writer.detach_buffer().expect("error");
         debug!("start to write_value_async()");
         let write_result = chr
             .write_value_async(&buffer)
             .unwrap()
-            .blocking_get()
+            .get()
             .expect("failed");
 
         if write_result != GattCommunicationStatus::Success {
@@ -384,8 +382,8 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         &self,
         characteristic_name: CoreCubeUuidName,
         handler_func: fn(
-            *mut CoreCubeNotifySender,
-            *mut CoreCubeNotifyArgs,
+            &CoreCubeNotifySender,
+            &CoreCubeNotifyArgs,
         ) -> CoreCubeNotifyResult,
     ) -> std::result::Result<CoreCubeNotifyHandler, String> {
         let chr_name = characteristic_name.to_string();
@@ -394,19 +392,18 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .clone()
             .unwrap()
             .get_characteristics(get_uuid(characteristic_name).unwrap())
-            .unwrap()
             .unwrap();
-        let chr = chr_list.get_at(0).expect("error: read").unwrap();
+        let chr = chr_list.get_at(0).expect("error: read");
         let winrt_handler = TypedEventHandler::new(handler_func);
         let token = Some(
-            chr.add_value_changed(&winrt_handler.clone())
+            chr.value_changed(&winrt_handler.clone())
                 .expect("error"),
         );
         chr.write_client_characteristic_configuration_descriptor_async(
             GattClientCharacteristicConfigurationDescriptorValue::Notify,
         )
         .unwrap()
-        .blocking_get()
+        .get()
         .expect("failed");
 
         let handler = CoreCubeNotifyHandler {
@@ -423,7 +420,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
 pub struct CoreCubeNotifyHandler {
     name: String,
     characteristic_name: String,
-    characteristic: winrt::ComPtr<GattCharacteristic>,
+    characteristic: GattCharacteristic,
     token: Option<EventRegistrationToken>,
 }
 
@@ -439,7 +436,7 @@ impl CoreCubeNotifyMethod for CoreCubeNotifyHandler {
                 GattClientCharacteristicConfigurationDescriptorValue::None,
             )
             .unwrap()
-            .blocking_get()
+            .get()
         {
             Ok(_) => (),
             _ => {
@@ -449,7 +446,7 @@ impl CoreCubeNotifyMethod for CoreCubeNotifyHandler {
             }
         }
 
-        match self.token {
+        match &self.token {
             Some(x) => match self.characteristic.remove_value_changed(x) {
                 Ok(_) => (),
                 _ => return Err("Error: remove_value_changed".to_string()),

@@ -1,15 +1,13 @@
 [package]
 name = "core_cube"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["yabe_z <Kazuhiro.Yabe@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 env_logger = "0.7.1"
 log = "0.4.8"
+winrt = { git = "https://github.com/microsoft/winrt-rs" }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies.winrt]
-version = "0.6.0"
-features = ["windows-system", "windows-devices", "windows-storage"]
