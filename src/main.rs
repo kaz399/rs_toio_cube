@@ -97,10 +97,7 @@ lazy_static! {
 }
 
 // Button Notify Handler
-fn button_notify(
-    _sender: &CoreCubeNotifySender,
-    arg: &CoreCubeNotifyArgs,
-) -> CoreCubeNotifyResult {
+fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> CoreCubeNotifyResult {
     let data = get_notify_data(arg);
     debug!("button status changed {:?}", data);
     let button_info = ButtonInfo {
