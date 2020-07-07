@@ -1,13 +1,14 @@
 [package]
 name = "core_cube"
-version = "0.1.1"
+version = "0.7.1"
 authors = ["yabe_z <Kazuhiro.Yabe@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 env_logger = "0.7.1"
 log = "0.4.8"
-winrt = { git = "https://github.com/microsoft/winrt-rs" }
+#winrt = { git = "https://github.com/microsoft/winrt-rs" }
+winrt = "0.7.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
