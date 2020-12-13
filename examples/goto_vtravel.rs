@@ -479,10 +479,26 @@ fn main() {
         }
     }
 
+    let cube2: CoreCubeBLE;
+    cube2 = match connect_ref_id() {
+        Ok(x) => x,
+        Err(e) => {
+            error!("{}", e);
+            std::process::exit(1);
+        }
+    };
+
     // LED on (green)
     let result = cube.write(
         CoreCubeUuidName::LightCtrl,
         &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
+    );
+    assert_eq!(result.unwrap(), true);
+
+    // cube2: LED on (blue)
+    let result = cube2.write(
+        CoreCubeUuidName::LightCtrl,
+        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x10],
     );
     assert_eq!(result.unwrap(), true);
 
@@ -580,6 +596,13 @@ fn main() {
 
     // LED off
     let result = cube.write(
+        CoreCubeUuidName::LightCtrl,
+        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00],
+    );
+    assert_eq!(result.unwrap(), true);
+
+    // cube2: LED off
+    let result = cube2.write(
         CoreCubeUuidName::LightCtrl,
         &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00],
     );
