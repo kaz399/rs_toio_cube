@@ -241,7 +241,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
     fn new(name: String) -> CoreCubeBLE {
         debug!("Create CoreCubeBLE: {}", name);
         CoreCubeBLE {
-            name: name,
+            name,
             ble_device: None,
             gatt_service: None,
         }
@@ -254,6 +254,12 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             Ok(bdev) => bdev,
             Err(x) => return Err(x.message()),
         };
+
+        let connection_status = ble_device.connection_status().unwrap();
+        debug!("Connection Status: {:?}", connection_status);
+        if connection_status == BluetoothConnectionStatus::Connected {
+            return Ok(false);
+        }
 
         for gatt_service in ble_device.gatt_services().unwrap() {
             if gatt_service.uuid().unwrap() == get_uuid(CoreCubeUuidName::Service).unwrap() {
