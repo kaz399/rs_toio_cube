@@ -520,6 +520,19 @@ fn main() {
     let result = cube.register_norify(CoreCubeUuidName::IdInfo, id_information_notify);
     let id_handler = result.unwrap();
 
+
+    // cube2: Set collision detection level: Level 10
+    let result = cube2.write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
+    assert_eq!(result.unwrap(), true);
+
+    // cube2: Set double-tap detection time: Level 2
+    let result = cube2.write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
+    assert_eq!(result.unwrap(), true);
+
+    // cube2: Register cube notify handlers
+    let result = cube2.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify);
+    let sensor_handler2 = result.unwrap();
+
     // Register Ctrl-C handler
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -621,5 +634,8 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     let result = id_handler.unregister();
+    assert_eq!(result.unwrap(), true);
+
+    let result = sensor_handler2.unregister();
     assert_eq!(result.unwrap(), true);
 }
