@@ -9,6 +9,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
+const KEYEVENT_THRESH_LR: usize = 10;
+const KEYEVENT_THRESH_UP: usize = 10;
+
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum ButtonStatus {
     Unknown,
@@ -281,173 +285,6 @@ fn get_sensor_info_list_2() -> Vec<SensorInfo> {
     sensor_info_list
 }
 
-fn get_button_info_list(duration: time::Duration) -> Vec<ButtonInfo> {
-    let mut button = BUTTON.lock().unwrap();
-    (*button).retain(|event| event.time.elapsed() <= duration);
-    let button_info_list = (*button).clone();
-
-    //debug!("list len (duration): {}", button_info_list.len());
-
-    //if !button_info_list.is_empty() {
-    //    for info in button_info_list.clone() {
-    //        debug!("button {:?}", info.time.elapsed());
-    //    }
-    //}
-
-    button_info_list
-}
-
-const CUBE_POSTURES: usize = 7;
-const TABLE_TYPES: usize = 3;
-
-static KEY_TABLE: [[Key; CUBE_POSTURES]; TABLE_TYPES] = [
-    [
-        Key::Escape,
-        Key::PageUp,
-        Key::PageDown,
-        Key::PageUp,
-        Key::PageUp,
-        Key::PageUp,
-        Key::PageUp,
-    ],
-    [
-        Key::Escape,
-        Key::LeftArrow,
-        Key::RightArrow,
-        Key::LeftArrow,
-        Key::LeftArrow,
-        Key::LeftArrow,
-        Key::LeftArrow,
-    ],
-    [
-        Key::Escape,
-        Key::UpArrow,
-        Key::DownArrow,
-        Key::UpArrow,
-        Key::UpArrow,
-        Key::UpArrow,
-        Key::UpArrow,
-    ],
-];
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum KeyAction {
-    Beep,
-    Rolling,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum ButtonEvent {
-    Nothing,
-    Single,
-    Double,
-    LongPress,
-}
-
-struct KeyEvent {
-    last_key_event_time: time::Instant,
-    last_double_tap_time: time::Instant,
-    double_click_detection_time: time::Duration,
-    long_press_detection_time: time::Duration,
-    next_ignore_button_event: ButtonStatus,
-}
-
-impl KeyEvent {
-    fn detect_click(&mut self, mut button_info_list: Vec<ButtonInfo>) -> ButtonEvent {
-        button_info_list.retain(|e| e.time >= self.last_key_event_time);
-
-        let now = time::Instant::now();
-        if button_info_list.is_empty() {
-            self.last_key_event_time = now;
-            return ButtonEvent::Nothing;
-        }
-
-        // Ensure that the first event of button_info_list is 'Press'
-        let first_event = button_info_list[0];
-        if first_event.button == ButtonStatus::Release {
-            self.last_key_event_time = first_event.time + time::Duration::from_millis(1);
-            button_info_list.remove(0);
-            if button_info_list.is_empty() {
-                return ButtonEvent::Nothing;
-            }
-        }
-
-        match button_info_list.len() {
-            1 => {
-                if now.duration_since(self.last_key_event_time) > self.long_press_detection_time {
-                    let last_event = button_info_list.last().unwrap();
-                    self.last_key_event_time = last_event.time + time::Duration::from_millis(1);
-                    info!(
-                        "[LONG-PRESS] next ignore:{:?} buflen:{} buf:{:?}",
-                        self.next_ignore_button_event,
-                        button_info_list.len(),
-                        now.duration_since(self.last_key_event_time)
-                    );
-                    return ButtonEvent::LongPress;
-                } else {
-                    return ButtonEvent::Nothing;
-                }
-            }
-            2 => {
-                if now.duration_since(self.last_key_event_time) > self.double_click_detection_time {
-                    let last_event = button_info_list.last().unwrap();
-                    self.last_key_event_time = last_event.time + time::Duration::from_millis(1);
-                    info!(
-                        "[SINGLE] next ignore:{:?} buflen:{} buf:{:?}",
-                        self.next_ignore_button_event,
-                        button_info_list.len(),
-                        now.duration_since(self.last_key_event_time)
-                    );
-                    return ButtonEvent::Single;
-                } else {
-                    return ButtonEvent::Nothing;
-                }
-            }
-            _ => {
-                // Multiple click is detected
-                let last_event = button_info_list.last().unwrap();
-                self.last_key_event_time = last_event.time + time::Duration::from_millis(1);
-                info!(
-                    "[DOUBLE] next ignore:{:?} buflen:{} buf:{:?}",
-                    self.next_ignore_button_event,
-                    button_info_list.len(),
-                    button_info_list,
-                );
-                return ButtonEvent::Double;
-            }
-        }
-    }
-
-    fn get_key_code(
-        &mut self,
-        key_table: KeyTableName,
-        sensor_info: SensorInfo,
-        click_type: ButtonEvent,
-    ) -> (Option<Key>, Option<KeyAction>) {
-        match click_type {
-            ButtonEvent::Nothing => {
-                if (self.last_double_tap_time != sensor_info.time)
-                    && (sensor_info.double_tap == DoubleTapStatus::Detect)
-                {
-                    self.last_double_tap_time = sensor_info.time;
-                    return (Some(Key::F5), Some(KeyAction::Rolling));
-                } else {
-                    return (None, None);
-                }
-            }
-            ButtonEvent::Single => {
-                let key = KEY_TABLE[key_table as usize][sensor_info.posture as usize];
-                match key {
-                    Key::Escape => (None, None),
-                    x => (Some(x), None),
-                }
-            }
-            ButtonEvent::Double => return (Some(Key::F5), None),
-            ButtonEvent::LongPress => return (Some(Key::Home), Some(KeyAction::Beep)),
-        }
-    }
-}
-
 fn main() {
     env_logger::init();
 
@@ -573,73 +410,69 @@ fn main() {
     .expect("Error setting Ctrl-C handler");
 
     // MAIN LOOP
-    let mut key = KeyEvent {
-        last_key_event_time: time::Instant::now(),
-        last_double_tap_time: time::Instant::now(),
-        double_click_detection_time: time::Duration::from_millis(500),
-        long_press_detection_time: time::Duration::from_millis(1500),
-        next_ignore_button_event: ButtonStatus::Press,
-    };
 
+    let mut engio = Enigo::new();
     let tick = time::Duration::from_millis(100);
-    let mut last_sensor_info_1: SensorInfo = Default::default();
-    let mut _last_sensor_info_2: SensorInfo = Default::default();
+    let mut integral_counter_cube1: usize = 0;
+    let mut integral_counter_cube2: usize = 0;
+    let mut integral_counter_inner_product: usize = 0;
+    let mut key: Key = Key::Layout(' ');
+
     while running.load(Ordering::SeqCst) {
-        match get_sensor_info_list_1().pop() {
-            Some(last) => last_sensor_info_1 = last,
-            None => (),
-        };
-        match get_sensor_info_list_2().pop() {
-            Some(last) => _last_sensor_info_2 = last,
-            None => (),
-        };
-        let duration = std::cmp::max(
-            key.last_key_event_time.elapsed(),
-            key.double_click_detection_time,
-        );
-        let button_info_list = get_button_info_list(duration);
-        let double_click_num = key.detect_click(button_info_list);
-        let (key_code, key_action) =
-            key.get_key_code(key_table, last_sensor_info_1, double_click_num);
-        match key_code {
-            Some(key) => {
-                info!("[KEYCODE] {:?}", key);
-                let mut engio = Enigo::new();
-                engio.key_down(key);
-            }
-            None => (),
-        };
-        match key_action {
-            Some(action) => match action {
-                KeyAction::Beep => {
-                    debug!("beep");
-                    let result = cube.write(
-                        CoreCubeUuidName::SoundCtrl,
-                        &vec![0x03, 0x01, 0x01, 0x05, 87, 0xff],
-                    );
-                    assert_eq!(result.unwrap(), true);
-                }
-                KeyAction::Rolling => {
-                    debug!("rolling");
-                    let result = cube.write(
-                        CoreCubeUuidName::SoundCtrl,
-                        &vec![
-                            0x03, 0x01, 13, 15, 69, 0xff, 1, 128, 0xff, 15, 69, 0xff, 1, 128, 0xff,
-                            15, 69, 0xff, 1, 128, 0xff, 50, 69, 0xff, 50, 65, 0xff, 50, 67, 0xff,
-                            15, 69, 0xff, 18, 128, 0xff, 15, 67, 0xff, 70, 69, 0xff,
-                        ],
-                    );
-                    assert_eq!(result.unwrap(), true);
-                    thread::sleep(time::Duration::from_millis(3200));
-                    let result = cube.write(
-                        CoreCubeUuidName::MotorCtrl,
-                        &vec![0x02, 0x01, 0x01, 115, 0x02, 0x02, 115, 120],
-                    );
-                    assert_eq!(result.unwrap(), true);
-                }
-            },
-            None => (),
+        if key != Key::Layout(' ') {
+            info!("[KEYCODE( up )] {:?}", key);
+            engio.key_up(key);
+            key = Key::Layout(' ');
         }
+
+        let shaking_cube1: usize;
+        let shaking_cube2: usize;
+
+        match get_sensor_info_list_1().pop() {
+            Some(last) => shaking_cube1 = last.shaking,
+            None => shaking_cube1 = 0,
+        };
+
+        match get_sensor_info_list_2().pop() {
+            Some(last) => shaking_cube2 = last.shaking,
+            None => shaking_cube2 = 0,
+        };
+
+
+        let inner_product = shaking_cube1 * shaking_cube2;
+        if (inner_product) != 0 {
+            integral_counter_cube1 = 0;
+            integral_counter_cube2 = 0;
+            integral_counter_inner_product += inner_product;
+            if integral_counter_inner_product > KEYEVENT_THRESH_UP {
+                key = Key::Layout('w');
+            }
+        } else {
+            integral_counter_cube1 += shaking_cube1;
+            integral_counter_cube2 += shaking_cube2;
+            integral_counter_inner_product = 0;
+
+            if integral_counter_cube1 > KEYEVENT_THRESH_LR {
+                key = Key::Layout('a');
+                integral_counter_cube1 = 0;
+            } else {
+                integral_counter_cube1 += shaking_cube1;
+            }
+
+            if integral_counter_cube2 > KEYEVENT_THRESH_LR {
+                key = Key::Layout('d');
+                integral_counter_cube2 = 0;
+            } else {
+                integral_counter_cube2 += shaking_cube2;
+            }
+
+        }
+
+        if key != Key::Layout(' ') {
+            info!("[KEYCODE(down)] {:?}", key);
+            engio.key_down(key);
+        }
+
         thread::sleep(tick);
     }
 
