@@ -77,6 +77,7 @@ struct SensorInfo {
     collision: CollisionStatus,
     double_tap: DoubleTapStatus,
     posture: PostureStatus,
+    shaking: usize,
 }
 
 impl Default for SensorInfo {
@@ -87,13 +88,15 @@ impl Default for SensorInfo {
             collision: CollisionStatus::Unknown,
             double_tap: DoubleTapStatus::Unknown,
             posture: PostureStatus::Unknown,
+            shaking: 0,
         }
     }
 }
 
 lazy_static! {
     static ref BUTTON: Mutex<Vec<ButtonInfo>> = Mutex::new(Vec::new());
-    static ref SENSOR: Mutex<Vec<SensorInfo>> = Mutex::new(Vec::new());
+    static ref SENSOR_1: Mutex<Vec<SensorInfo>> = Mutex::new(Vec::new());
+    static ref SENSOR_2: Mutex<Vec<SensorInfo>> = Mutex::new(Vec::new());
 }
 
 // Button Notify Handler
@@ -115,44 +118,61 @@ fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> Co
     Ok(())
 }
 
-// Sensor Notify Hander
-fn sensor_information_notify(
+fn get_sensor_info(data: Vec::<u8>) -> SensorInfo {
+    SensorInfo {
+        time: time::Instant::now(),
+        slope: match data[1] {
+            0x00 => SlopeStatus::Aslant,
+            0x01 => SlopeStatus::Horizontal,
+            _ => SlopeStatus::Unknown,
+        },
+        collision: match data[2] {
+            0x00 => CollisionStatus::NotDetect,
+            0x01 => CollisionStatus::Detect,
+            _ => CollisionStatus::Unknown,
+        },
+        double_tap: match data[3] {
+            0x00 => DoubleTapStatus::NotDetect,
+            0x01 => DoubleTapStatus::Detect,
+            _ => DoubleTapStatus::Unknown,
+        },
+        posture: match data[4] {
+            0x01 => PostureStatus::Normal,
+            0x02 => PostureStatus::Reverse,
+            0x03 => PostureStatus::Downward,
+            0x04 => PostureStatus::Upward,
+            0x05 => PostureStatus::RigitSideUp,
+            0x06 => PostureStatus::LeftSideUp,
+            _ => PostureStatus::Unknown,
+        },
+        shaking: data[5] as usize,
+    }
+}
+
+// cube1 Sensor Notify Handler
+fn sensor_information_notify_1(
     _sender: &CoreCubeNotifySender,
     arg: &CoreCubeNotifyArgs,
 ) -> CoreCubeNotifyResult {
     let data = get_notify_data(arg);
-    debug!("sensor information status changed {:?}", data);
-
-    let now = time::Instant::now();
+    debug!("sensor(cube1) information status changed {:?}", data);
     {
-        let mut sensor = SENSOR.lock().unwrap();
-        (*sensor).push(SensorInfo {
-            time: now,
-            slope: match data[1] {
-                0x00 => SlopeStatus::Aslant,
-                0x01 => SlopeStatus::Horizontal,
-                _ => SlopeStatus::Unknown,
-            },
-            collision: match data[2] {
-                0x00 => CollisionStatus::NotDetect,
-                0x01 => CollisionStatus::Detect,
-                _ => CollisionStatus::Unknown,
-            },
-            double_tap: match data[3] {
-                0x00 => DoubleTapStatus::NotDetect,
-                0x01 => DoubleTapStatus::Detect,
-                _ => DoubleTapStatus::Unknown,
-            },
-            posture: match data[4] {
-                0x01 => PostureStatus::Normal,
-                0x02 => PostureStatus::Reverse,
-                0x03 => PostureStatus::Downward,
-                0x04 => PostureStatus::Upward,
-                0x05 => PostureStatus::RigitSideUp,
-                0x06 => PostureStatus::LeftSideUp,
-                _ => PostureStatus::Unknown,
-            },
-        });
+        let mut sensor = SENSOR_1.lock().unwrap();
+        (*sensor).push(get_sensor_info(data));
+    }
+    Ok(())
+}
+
+// cube2 Sensor Notify Handler
+fn sensor_information_notify_2(
+    _sender: &CoreCubeNotifySender,
+    arg: &CoreCubeNotifyArgs,
+) -> CoreCubeNotifyResult {
+    let data = get_notify_data(arg);
+    debug!("sensor(cube2) information status changed {:?}", data);
+    {
+        let mut sensor = SENSOR_2.lock().unwrap();
+        (*sensor).push(get_sensor_info(data));
     }
     Ok(())
 }
@@ -239,12 +259,23 @@ fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
     }
 }
 
-fn get_sensor_info_list() -> Vec<SensorInfo> {
-    let mut sensor = SENSOR.lock().unwrap();
+fn get_sensor_info_list_1() -> Vec<SensorInfo> {
+    let mut sensor = SENSOR_1.lock().unwrap();
     let sensor_info_list = (*sensor).clone();
     (*sensor).clear();
     if !sensor_info_list.is_empty() {
-        debug!("sensor {:?}", sensor_info_list);
+        debug!("cube1:sensor {:?}", sensor_info_list);
+    }
+
+    sensor_info_list
+}
+
+fn get_sensor_info_list_2() -> Vec<SensorInfo> {
+    let mut sensor = SENSOR_2.lock().unwrap();
+    let sensor_info_list = (*sensor).clone();
+    (*sensor).clear();
+    if !sensor_info_list.is_empty() {
+        debug!("cube2:sensor {:?}", sensor_info_list);
     }
 
     sensor_info_list
@@ -514,7 +545,7 @@ fn main() {
     let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_notify);
     let button_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify);
+    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify_1);
     let sensor_handler = result.unwrap();
 
     let result = cube.register_norify(CoreCubeUuidName::IdInfo, id_information_notify);
@@ -530,7 +561,7 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // cube2: Register cube notify handlers
-    let result = cube2.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify);
+    let result = cube2.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify_2);
     let sensor_handler2 = result.unwrap();
 
     // Register Ctrl-C handler
@@ -551,10 +582,15 @@ fn main() {
     };
 
     let tick = time::Duration::from_millis(100);
-    let mut last_sensor_info: SensorInfo = Default::default();
+    let mut last_sensor_info_1: SensorInfo = Default::default();
+    let mut _last_sensor_info_2: SensorInfo = Default::default();
     while running.load(Ordering::SeqCst) {
-        match get_sensor_info_list().pop() {
-            Some(last) => last_sensor_info = last,
+        match get_sensor_info_list_1().pop() {
+            Some(last) => last_sensor_info_1 = last,
+            None => (),
+        };
+        match get_sensor_info_list_2().pop() {
+            Some(last) => _last_sensor_info_2 = last,
             None => (),
         };
         let duration = std::cmp::max(
@@ -564,7 +600,7 @@ fn main() {
         let button_info_list = get_button_info_list(duration);
         let double_click_num = key.detect_click(button_info_list);
         let (key_code, key_action) =
-            key.get_key_code(key_table, last_sensor_info, double_click_num);
+            key.get_key_code(key_table, last_sensor_info_1, double_click_num);
         match key_code {
             Some(key) => {
                 info!("[KEYCODE] {:?}", key);
