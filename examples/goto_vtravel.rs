@@ -9,9 +9,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
-const KEYEVENT_THRESH_LR: usize = 10;
-const KEYEVENT_THRESH_UP: usize = 10;
-
+const KEYEVENT_THRESH_LR: usize = 15;
+const KEYEVENT_THRESH_UP: usize = 8;
+const KEYEVENT_EFFECTIVE_DURATION: u64 = 600;
+const TURNING_DURATION: usize = 3;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum ButtonStatus {
@@ -122,7 +123,7 @@ fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> Co
     Ok(())
 }
 
-fn get_sensor_info(data: Vec::<u8>) -> SensorInfo {
+fn get_sensor_info(data: Vec<u8>) -> SensorInfo {
     SensorInfo {
         time: time::Instant::now(),
         slope: match data[1] {
@@ -388,7 +389,6 @@ fn main() {
     let result = cube.register_norify(CoreCubeUuidName::IdInfo, id_information_notify);
     let id_handler = result.unwrap();
 
-
     // cube2: Set collision detection level: Level 10
     let result = cube2.write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
     assert_eq!(result.unwrap(), true);
@@ -413,12 +413,21 @@ fn main() {
 
     let mut engio = Enigo::new();
     let tick = time::Duration::from_millis(100);
+    let mut last_sensor_info_cube1: SensorInfo = Default::default();
+    let mut last_sensor_info_cube2: SensorInfo = Default::default();
     let mut integral_counter_cube1: usize = 0;
     let mut integral_counter_cube2: usize = 0;
     let mut integral_counter_inner_product: usize = 0;
     let mut key: Key = Key::Layout(' ');
+    let mut turning: usize = 0;
 
     while running.load(Ordering::SeqCst) {
+        if turning > 0 {
+            turning -= 1;
+            thread::sleep(tick);
+            continue;
+        }
+
         if key != Key::Layout(' ') {
             info!("[KEYCODE( up )] {:?}", key);
             engio.key_up(key);
@@ -429,15 +438,38 @@ fn main() {
         let shaking_cube2: usize;
 
         match get_sensor_info_list_1().pop() {
-            Some(last) => shaking_cube1 = last.shaking,
-            None => shaking_cube1 = 0,
+            Some(last) => last_sensor_info_cube1 = last,
+            None => (),
         };
 
         match get_sensor_info_list_2().pop() {
-            Some(last) => shaking_cube2 = last.shaking,
-            None => shaking_cube2 = 0,
+            Some(last) => last_sensor_info_cube2 = last,
+            None => (),
         };
 
+        debug!(
+            "elapsed: 1:{:?} 2:{:?}",
+            last_sensor_info_cube1.time.elapsed(),
+            last_sensor_info_cube2.time.elapsed()
+        );
+
+        if last_sensor_info_cube1.time.elapsed()
+            < time::Duration::from_millis(KEYEVENT_EFFECTIVE_DURATION)
+        {
+            shaking_cube1 = last_sensor_info_cube1.shaking;
+        } else {
+            shaking_cube1 = 0;
+        }
+
+        if last_sensor_info_cube2.time.elapsed()
+            < time::Duration::from_millis(KEYEVENT_EFFECTIVE_DURATION)
+        {
+            shaking_cube2 = last_sensor_info_cube2.shaking;
+        } else {
+            shaking_cube2 = 0;
+        }
+
+        debug!("shaking 1:{} 2:{}", shaking_cube1, shaking_cube2);
 
         let inner_product = shaking_cube1 * shaking_cube2;
         if (inner_product) != 0 {
@@ -454,6 +486,7 @@ fn main() {
 
             if integral_counter_cube1 > KEYEVENT_THRESH_LR {
                 key = Key::Layout('a');
+                turning = TURNING_DURATION;
                 integral_counter_cube1 = 0;
             } else {
                 integral_counter_cube1 += shaking_cube1;
@@ -461,11 +494,11 @@ fn main() {
 
             if integral_counter_cube2 > KEYEVENT_THRESH_LR {
                 key = Key::Layout('d');
+                turning = TURNING_DURATION;
                 integral_counter_cube2 = 0;
             } else {
                 integral_counter_cube2 += shaking_cube2;
             }
-
         }
 
         if key != Key::Layout(' ') {
