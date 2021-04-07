@@ -105,8 +105,7 @@ lazy_static! {
 }
 
 // Button Notify Handler
-fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn button_notify(data: Vec<u8>) {
     debug!("button status changed {:?}", data);
     let button_info = ButtonInfo {
         time: time::Instant::now(),
@@ -120,7 +119,6 @@ fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> Co
         let mut button = BUTTON.lock().unwrap();
         (*button).push(button_info);
     }
-    Ok(())
 }
 
 fn get_sensor_info(data: Vec<u8>) -> SensorInfo {
@@ -155,41 +153,26 @@ fn get_sensor_info(data: Vec<u8>) -> SensorInfo {
 }
 
 // cube1 Sensor Notify Handler
-fn sensor_information_notify_1(
-    _sender: &CoreCubeNotifySender,
-    arg: &CoreCubeNotifyArgs,
-) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn sensor_information_notify_1(data: Vec<u8>) {
     debug!("sensor(cube1) information status changed {:?}", data);
     {
         let mut sensor = SENSOR_1.lock().unwrap();
         (*sensor).push(get_sensor_info(data));
     }
-    Ok(())
 }
 
 // cube2 Sensor Notify Handler
-fn sensor_information_notify_2(
-    _sender: &CoreCubeNotifySender,
-    arg: &CoreCubeNotifyArgs,
-) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn sensor_information_notify_2(data: Vec<u8>) {
     debug!("sensor(cube2) information status changed {:?}", data);
     {
         let mut sensor = SENSOR_2.lock().unwrap();
         (*sensor).push(get_sensor_info(data));
     }
-    Ok(())
 }
 
 // ID Information Notify Handler
-fn id_information_notify(
-    _sender: &CoreCubeNotifySender,
-    arg: &CoreCubeNotifyArgs,
-) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn id_information_notify(data: Vec<u8>) {
     info!("id information status changed {:?}", data);
-    Ok(())
 }
 
 // Connect by ref_id (paired cube)
@@ -380,13 +363,13 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
-    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_notify);
+    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
     let button_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify_1);
+    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify_1));
     let sensor_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::IdInfo, id_information_notify);
+    let result = cube.register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
     let id_handler = result.unwrap();
 
     // cube2: Set collision detection level: Level 10
@@ -398,7 +381,7 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // cube2: Register cube notify handlers
-    let result = cube2.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify_2);
+    let result = cube2.register_norify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify_2));
     let sensor_handler2 = result.unwrap();
 
     // Register Ctrl-C handler

@@ -97,8 +97,7 @@ lazy_static! {
 }
 
 // Button Notify Handler
-fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn button_notify(data: Vec<u8>) {
     debug!("button status changed {:?}", data);
     let button_info = ButtonInfo {
         time: time::Instant::now(),
@@ -112,15 +111,10 @@ fn button_notify(_sender: &CoreCubeNotifySender, arg: &CoreCubeNotifyArgs) -> Co
         let mut button = BUTTON.lock().unwrap();
         (*button).push(button_info);
     }
-    Ok(())
 }
 
 // Sensor Notify Hander
-fn sensor_information_notify(
-    _sender: &CoreCubeNotifySender,
-    arg: &CoreCubeNotifyArgs,
-) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn sensor_information_notify(data: Vec<u8>) {
     debug!("sensor information status changed {:?}", data);
 
     let now = time::Instant::now();
@@ -154,17 +148,11 @@ fn sensor_information_notify(
             },
         });
     }
-    Ok(())
 }
 
 // ID Information Notify Handler
-fn id_information_notify(
-    _sender: &CoreCubeNotifySender,
-    arg: &CoreCubeNotifyArgs,
-) -> CoreCubeNotifyResult {
-    let data = get_notify_data(arg);
+fn id_information_notify(data: Vec<u8>) {
     info!("id information status changed {:?}", data);
-    Ok(())
 }
 
 // Connect by ref_id (paired cube)
@@ -495,13 +483,13 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
-    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, button_notify);
+    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
     let button_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, sensor_information_notify);
+    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify));
     let sensor_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::IdInfo, id_information_notify);
+    let result = cube.register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
     let id_handler = result.unwrap();
 
     // Register Ctrl-C handler
