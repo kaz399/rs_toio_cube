@@ -238,7 +238,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             return Ok(false);
         }
 
-        for gatt_service in ble_device.GattServices().unwrap() {
+        for gatt_service in ble_device.GetGattServicesAsync().unwrap().get().unwrap().Services().unwrap() {
             if gatt_service.Uuid().unwrap() == get_uuid(CoreCubeUuidName::Service).unwrap() {
                 self.gatt_service = Some(gatt_service);
             }

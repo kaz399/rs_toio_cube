@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 env_logger = "0.7.1"
 log = "0.4.8"
-windows = "0.7.0"
+windows = "0.8.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-windows = "0.7.0"
+windows = "0.8.0"
