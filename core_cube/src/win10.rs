@@ -19,7 +19,7 @@ use bindings::{
     Windows::Storage::Streams::*,
 };
 
-use windows::{Guid, HString};
+use windows::{Guid, HSTRING};
 
 pub type CoreCubeNotifyHandlerFunction = Box<dyn Fn(Vec<u8>)>;
 
@@ -226,7 +226,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
 
     fn connect_ref_id(&mut self, ref_id_str: &String) -> std::result::Result<bool, String> {
         // connect to device
-        let ref_id_hstr = HString::from(ref_id_str);
+        let ref_id_hstr = HSTRING::from(ref_id_str);
         let ble_device = match BluetoothLEDevice::FromIdAsync(&ref_id_hstr).unwrap().get() {
             Ok(bdev) => bdev,
             Err(x) => return Err(x.message()),
