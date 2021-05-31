@@ -343,9 +343,13 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .gatt_service
             .clone()
             .unwrap()
-            .GetCharacteristics(get_uuid(characteristic_name).unwrap())
+            .GetCharacteristicsForUuidAsync(get_uuid(characteristic_name).unwrap())
+            .unwrap()
+            .get()
+            .unwrap()
+            .Characteristics()
             .unwrap();
-        let chr = chr_list.GetAt(0).expect("error: read");
+        let chr = chr_list.GetAt(0).expect("error: write");
         let writer = DataWriter::new().unwrap();
         writer.WriteBytes(bytes).expect("error");
         let buffer = writer.DetachBuffer().expect("error");
@@ -374,9 +378,15 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             .gatt_service
             .clone()
             .unwrap()
-            .GetCharacteristics(get_uuid(characteristic_name).unwrap())
+            .GetCharacteristicsForUuidAsync(get_uuid(characteristic_name).unwrap())
+            .unwrap()
+            .get()
             .unwrap();
-        let chr = chr_list.GetAt(0).expect("error: read");
+        let chr = chr_list
+            .Characteristics()
+            .unwrap()
+            .GetAt(0)
+            .expect("error: read");
         let winrt_handler = TypedEventHandler::new(
             move |_sender: &Option<GattCharacteristic>,
             args: &Option<GattValueChangedEventArgs>| {
@@ -404,7 +414,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
             name: self.name.clone(),
             characteristic_name: chr_name.clone(),
             characteristic: chr,
-            token: token,
+            token,
         };
 
         Ok(handler)
