@@ -9,6 +9,9 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, thread, time};
 use rand::Rng;
 
+const MOTOR_FW: u8 = 0x01;
+const MOTOR_RV: u8 = 0x02;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum ButtonStatus {
     Unknown,
@@ -382,47 +385,48 @@ fn main() {
             println!("next action:{:?}", cube_action);
         }
 
-        let motor_control_bytestream = match cube_action {
+        let motor_control_data = match cube_action {
             CubeAction::Swing => {
                 let speed: u8 = 10;
-                let bytestream = match loop_count % beats {
-                    0 | 2 => vec![0x02, 0x01, 0x01, speed, 0x02, 0x02, speed, motor_duration],
-                    1 | 3 => vec![0x02, 0x01, 0x02, speed, 0x02, 0x01, speed, motor_duration],
-                    _ => vec![0x02, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x0],
+                let motor_ctrl = match loop_count % beats {
+                    0 | 2 => vec![MOTOR_FW, speed, MOTOR_RV, speed, motor_duration],
+                    1 | 3 => vec![MOTOR_RV, speed, MOTOR_FW, speed, motor_duration],
+                    _ => vec![MOTOR_FW, 0, MOTOR_FW, 0, 0],
                 };
-                Some(bytestream)
+                Some(motor_ctrl)
             },
             CubeAction::Step2 => {
                 let speed: u8 = 10;
-                let bytestream = match loop_count % beats {
-                    0 | 2 => vec![0x02, 0x01, 0x01, speed, 0x02, 0x01, speed, motor_duration],
-                    1 | 3 => vec![0x02, 0x01, 0x02, speed, 0x02, 0x02, speed, motor_duration],
-                    _ => vec![0x02, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x0],
+                let motor_ctrl = match loop_count % beats {
+                    0 | 2 => vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration],
+                    1 | 3 => vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration],
+                    _ => vec![MOTOR_FW, 0, MOTOR_FW, 0, 0],
                 };
-                Some(bytestream)
+                Some(motor_ctrl)
             },
             CubeAction::Step4 => {
                 let speed: u8 = 10;
-                let bytestream = match loop_count % beats {
-                    0 | 1 => vec![0x02, 0x01, 0x01, speed, 0x02, 0x01, speed, motor_duration],
-                    2 | 3 => vec![0x02, 0x01, 0x02, speed, 0x02, 0x02, speed, motor_duration],
-                    _ => vec![0x02, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x0],
+                let motor_ctrl = match loop_count % beats {
+                    0 | 1 => vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration],
+                    2 | 3 => vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration],
+                    _ => vec![MOTOR_FW, 0, MOTOR_FW, 0, 0],
                 };
-                Some(bytestream)
+                Some(motor_ctrl)
             },
             CubeAction::RollingL => {
                 let speed: u8 = 10;
-                let bytestream = vec![0x02, 0x01, 0x01, speed, 0x02, 0x02, speed, max_duration as u8];
-                Some(bytestream)
+                let motor_ctrl = vec![MOTOR_FW, speed, MOTOR_RV, speed, max_duration as u8];
+                Some(motor_ctrl)
             },
             CubeAction::RollingR => {
                 let speed: u8 = 10;
-                let bytestream = vec![0x02, 0x01, 0x02, speed, 0x02, 0x01, speed, max_duration as u8];
-                Some(bytestream)
+                let motor_ctrl = vec![MOTOR_RV, speed, MOTOR_FW, speed, max_duration as u8];
+                Some(motor_ctrl)
             },
         };
 
-        if let Some(bytestream) = motor_control_bytestream {
+        if let Some(control) = motor_control_data {
+            let bytestream = vec![0x02, 0x01, control[0], control[1], 0x02, control[2], control[3], control[4]];
             let result1 = cube1.write(
                 CoreCubeUuidName::MotorCtrl,
                 &bytestream);
