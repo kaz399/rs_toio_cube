@@ -53,7 +53,8 @@ enum PostureStatus {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum CubeAction {
-    Swing,
+    SwingL,
+    SwingR,
     Step2,
     Step4,
     RollingL,
@@ -242,8 +243,8 @@ fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
 // choose next cube action
 fn get_next_cube_action() -> CubeAction {
     let mut rng = rand::thread_rng();
-    let actions = [CubeAction::Swing, CubeAction::Step2, CubeAction::Step4, CubeAction::RollingL, CubeAction::RollingR];
-    let weight = [8, 2, 2, 1, 1];
+    let actions = [CubeAction::SwingL, CubeAction::SwingR, CubeAction::Step2, CubeAction::Step4, CubeAction::RollingL, CubeAction::RollingR];
+    let weight = [4, 4, 4, 3, 8, 8];
 
     let mut random_max = 0;
     for value in weight {
@@ -374,10 +375,10 @@ fn main() {
     let beats = 4;
     let mut loop_count: usize = 0;
 
-    let max_duration = cmp::min(255, (interval / 10) & 0xff);
+    let max_duration = cmp::min(255, ((interval / 10) + 8) & 0xff);
     let motor_duration = ((max_duration * 2) / 3) as u8;
     println!("max_duration:{}, motor_duration:{}", max_duration, motor_duration);
-    let mut cube_action = CubeAction::Swing;
+    let mut cube_action = CubeAction::Step2;
 
     while running.load(Ordering::SeqCst) {
         if (loop_count % beats) == 0 {
@@ -386,8 +387,8 @@ fn main() {
         }
 
         let motor_control_data = match cube_action {
-            CubeAction::Swing => {
-                let speed: u8 = 10;
+            CubeAction::SwingL=> {
+                let speed: u8 = 20;
                 let motor_ctrl = match loop_count % beats {
                     0 | 2 => vec![MOTOR_FW, speed, MOTOR_RV, speed, motor_duration],
                     1 | 3 => vec![MOTOR_RV, speed, MOTOR_FW, speed, motor_duration],
@@ -395,8 +396,17 @@ fn main() {
                 };
                 Some(motor_ctrl)
             },
+            CubeAction::SwingR=> {
+                let speed: u8 = 20;
+                let motor_ctrl = match loop_count % beats {
+                    0 | 2 => vec![MOTOR_RV, speed, MOTOR_FW, speed, motor_duration],
+                    1 | 3 => vec![MOTOR_FW, speed, MOTOR_RV, speed, motor_duration],
+                    _ => vec![MOTOR_FW, 0, MOTOR_FW, 0, 0],
+                };
+                Some(motor_ctrl)
+            },
             CubeAction::Step2 => {
-                let speed: u8 = 10;
+                let speed: u8 = 20;
                 let motor_ctrl = match loop_count % beats {
                     0 | 2 => vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration],
                     1 | 3 => vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration],
@@ -405,7 +415,7 @@ fn main() {
                 Some(motor_ctrl)
             },
             CubeAction::Step4 => {
-                let speed: u8 = 10;
+                let speed: u8 = 20;
                 let motor_ctrl = match loop_count % beats {
                     0 | 1 => vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration],
                     2 | 3 => vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration],
@@ -414,12 +424,12 @@ fn main() {
                 Some(motor_ctrl)
             },
             CubeAction::RollingL => {
-                let speed: u8 = 10;
+                let speed: u8 = 35;
                 let motor_ctrl = vec![MOTOR_FW, speed, MOTOR_RV, speed, max_duration as u8];
                 Some(motor_ctrl)
             },
             CubeAction::RollingR => {
-                let speed: u8 = 10;
+                let speed: u8 = 35;
                 let motor_ctrl = vec![MOTOR_RV, speed, MOTOR_FW, speed, max_duration as u8];
                 Some(motor_ctrl)
             },
