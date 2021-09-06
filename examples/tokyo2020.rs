@@ -66,6 +66,7 @@ enum CubeAction {
 enum CubeCommand {
     Move,
     MoveTo,
+    MoveToMulti,
     Nothing,
     End,
 }
@@ -372,11 +373,13 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // cube3: LED on (green)
-    let result = cube[2].write(
-        CoreCubeUuidName::LightCtrl,
-        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
-    );
-    assert_eq!(result.unwrap(), true);
+    if cube_max >= 3 {
+        let result = cube[2].write(
+            CoreCubeUuidName::LightCtrl,
+            &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
+        );
+        assert_eq!(result.unwrap(), true);
+    }
 
     // Set collision detection level: Level 10
     let result = cube[0].write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
@@ -584,7 +587,39 @@ fn main() {
                     step_count += 1;
                     thread::sleep(tick);
                 }
-                CubeCommand::MoveTo => (),
+                CubeCommand::MoveTo => {
+                    if let Some(data) = control.data {
+                        let timeout = data[0];
+                        let moving_type = data[1];
+                        let max_speed = data[2];
+                        let acceleration = data[3];
+                        let x_l = data[4];
+                        let x_u = data[5];
+                        let y_l = data[6];
+                        let y_u = data[7];
+                        let degree_l = data[8];
+                        let degree_u = data[9];
+                        let ble_data: Vec<u8> = vec![
+                            0x03,
+                            0x00,
+                            timeout,
+                            moving_type,
+                            max_speed,
+                            acceleration,
+                            x_l,
+                            x_u,
+                            y_l,
+                            y_u,
+                            degree_l,
+                            degree_u,
+                        ];
+                        for i in 0..cube_max {
+                            let result = cube[i].write(CoreCubeUuidName::MotorCtrl, &ble_data);
+                            assert_eq!(result.unwrap(), true);
+                        }
+                    }
+                }
+                CubeCommand::MoveToMulti => {}
                 CubeCommand::End => {
                     step_count = 0;
                     cube_action = get_next_cube_action();
