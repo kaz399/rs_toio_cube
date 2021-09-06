@@ -1,4 +1,4 @@
-﻿use clap::{App, Arg};
+use clap::{App, Arg};
 use core_cube::win10::*;
 use ctrlc;
 use env_logger;
@@ -267,7 +267,7 @@ fn get_next_cube_action() -> CubeAction {
         CubeAction::RollingL,
         CubeAction::RollingR,
     ];
-    let weight = [4, 4, 4, 3, 18, 5, 5];
+    let weight = [4, 4, 4, 3, 5, 5, 5];
 
     let mut random_max = 0;
     for value in weight {
@@ -293,12 +293,20 @@ fn main() {
     env_logger::init();
 
     // Set command line options
-    let app = App::new("example").version("0.0.1").arg(
-        Arg::with_name("tempo")
-            .help("tempo")
-            .long("tempo")
-            .takes_value(true),
-    );
+    let app = App::new("example")
+        .version("0.0.1")
+        .arg(
+            Arg::with_name("tempo")
+                .help("tempo")
+                .long("tempo")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("cubes")
+                .help("total cubes")
+                .long("cubes")
+                .takes_value(true),
+        );
 
     // Parse arguments
     let matches = app.get_matches();
@@ -322,66 +330,81 @@ fn main() {
         println!("tempo {} (interval:{}[ms])", tempo_str, interval);
     }
 
-    // connect
-    let cube1: CoreCubeBLE;
-    cube1 = match connect_ref_id() {
-        Ok(x) => x,
-        Err(e) => {
-            error!("{}", e);
-            std::process::exit(1);
-        }
-    };
+    let mut cube_max: usize = 1;
+    if let Some(cubes_str) = matches.value_of("cubes") {
+        cube_max = match usize::from_str_radix(&cubes_str, 10) {
+            Ok(cube_num) => cube_num,
+            Err(e) => {
+                error!("{}", e);
+                1
+            }
+        };
+        println!("using {} cubes", cube_max);
+    }
 
-    let cube2: CoreCubeBLE;
-    cube2 = match connect_ref_id() {
-        Ok(x) => x,
-        Err(e) => {
-            error!("{}", e);
-            std::process::exit(1);
-        }
-    };
+    // connect
+    let mut cube: Vec<CoreCubeBLE> = Vec::with_capacity(cube_max);
+
+    for i in 0..cube_max {
+        println!("connect cube {}", i);
+        let c = match connect_ref_id() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("{}", e);
+                std::process::exit(1);
+            }
+        };
+        cube.push(c);
+    }
 
     // LED on (blue)
-    let result = cube1.write(
+    let result = cube[0].write(
         CoreCubeUuidName::LightCtrl,
         &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x10],
     );
     assert_eq!(result.unwrap(), true);
 
     // cube2: LED on (red)
-    let result = cube2.write(
+    let result = cube[1].write(
         CoreCubeUuidName::LightCtrl,
         &vec![0x03, 0x00, 0x01, 0x01, 0x10, 0x00, 0x00],
     );
     assert_eq!(result.unwrap(), true);
 
+    // cube3: LED on (green)
+    let result = cube[2].write(
+        CoreCubeUuidName::LightCtrl,
+        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
+    );
+    assert_eq!(result.unwrap(), true);
+
     // Set collision detection level: Level 10
-    let result = cube1.write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
+    let result = cube[0].write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
     assert_eq!(result.unwrap(), true);
 
     // Set double-tap detection time: Level 2
-    let result = cube1.write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
+    let result = cube[0].write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
     assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
-    let result = cube1.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
+    let result = cube[0].register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
     let button_handler = result.unwrap();
 
-    let result = cube1.register_norify(
+    let result = cube[0].register_norify(
         CoreCubeUuidName::SensorInfo,
         Box::new(sensor_information_notify_1),
     );
     let sensor_handler = result.unwrap();
 
-    let result = cube1.register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
+    let result = cube[0].register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
     let id_handler = result.unwrap();
 
     // cube2: Set collision detection level: Level 10
-    let result = cube2.write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
+    let result = cube[1].write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
     assert_eq!(result.unwrap(), true);
 
     // cube2: Set double-tap detection time: Level 2
-    let result = cube2.write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
+    let result = cube[1].write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
     assert_eq!(result.unwrap(), true);
 
     // Register Ctrl-C handler
@@ -399,7 +422,7 @@ fn main() {
     let mut step_count: usize = 0;
 
     let max_duration = cmp::min(255, (interval / 10) & 0xff);
-    let motor_duration = ((max_duration * 2) / 3) as u8;
+    let motor_duration = ((max_duration * 4) / 5) as u8;
     println!(
         "max_duration:{}, motor_duration:{}",
         max_duration, motor_duration
@@ -469,7 +492,7 @@ fn main() {
                         command: CubeCommand::Move,
                         data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration]),
                     },
-                    1 | 3 => CubeControl {
+                    2 | 3 => CubeControl {
                         command: CubeCommand::Move,
                         data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration]),
                     },
@@ -483,21 +506,21 @@ fn main() {
             CubeAction::StepLR2 => {
                 let speed: u8 = 20;
                 let motor_ctrl: CubeControl = match step_count {
-                    0 | 2 => CubeControl {
+                    0 | 3 => CubeControl {
                         command: CubeCommand::Move,
-                        data: Some(vec![MOTOR_FW, speed, MOTOR_FW, 0, motor_duration]),
+                        data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed / 2, motor_duration]),
                     },
-                    1 | 3 => CubeControl {
+                    1 | 2 => CubeControl {
                         command: CubeCommand::Move,
-                        data: Some(vec![MOTOR_FW, 0, MOTOR_FW, speed, motor_duration]),
+                        data: Some(vec![MOTOR_FW, speed / 2, MOTOR_FW, speed, motor_duration]),
                     },
-                    4 | 6 => CubeControl {
+                    4 | 7 => CubeControl {
                         command: CubeCommand::Move,
-                        data: Some(vec![MOTOR_RV, 0, MOTOR_RV, speed, motor_duration]),
+                        data: Some(vec![MOTOR_RV, speed / 2, MOTOR_RV, speed, motor_duration]),
                     },
-                    5 | 7 => CubeControl {
+                    5 | 6 => CubeControl {
                         command: CubeCommand::Move,
-                        data: Some(vec![MOTOR_RV, speed, MOTOR_RV, 0, motor_duration]),
+                        data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed / 2, motor_duration]),
                     },
                     _ => CubeControl {
                         command: CubeCommand::End,
@@ -553,10 +576,10 @@ fn main() {
                         let ble_data: Vec<u8> = vec![
                             0x02, 0x01, data[0], data[1], 0x02, data[2], data[3], data[4],
                         ];
-                        let result1 = cube1.write(CoreCubeUuidName::MotorCtrl, &ble_data);
-                        assert_eq!(result1.unwrap(), true);
-                        let result2 = cube2.write(CoreCubeUuidName::MotorCtrl, &ble_data);
-                        assert_eq!(result2.unwrap(), true);
+                        for i in 0..cube_max {
+                            let result = cube[i].write(CoreCubeUuidName::MotorCtrl, &ble_data);
+                            assert_eq!(result.unwrap(), true);
+                        }
                     }
                     step_count += 1;
                     thread::sleep(tick);
@@ -567,7 +590,7 @@ fn main() {
                     cube_action = get_next_cube_action();
                     println!("next action:{:?}", cube_action);
                 }
-                CubeCommand::Nothing | _ => {
+                CubeCommand::Nothing => {
                     step_count += 1;
                     thread::sleep(tick);
                 }
@@ -577,20 +600,16 @@ fn main() {
     // --------------------------------------------------------------------------------
 
     // LED off
-    let result = cube1.write(
-        CoreCubeUuidName::LightCtrl,
-        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00],
-    );
-    assert_eq!(result.unwrap(), true);
+    for i in 0..cube_max {
+        let result = cube[i].write(
+            CoreCubeUuidName::LightCtrl,
+            &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00],
+        );
+        assert_eq!(result.unwrap(), true);
+    }
 
-    // cube2: LED off
-    let result = cube2.write(
-        CoreCubeUuidName::LightCtrl,
-        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00],
-    );
-    assert_eq!(result.unwrap(), true);
-
-    let result = cube1.write(
+    // beep
+    let result = cube[0].write(
         CoreCubeUuidName::SoundCtrl,
         &vec![0x03, 0x01, 0x01, 0x0a, 57, 0xff],
     );
