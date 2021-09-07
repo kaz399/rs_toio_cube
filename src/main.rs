@@ -153,6 +153,12 @@ fn sensor_information_notify(data: Vec<u8>) {
 // ID Information Notify Handler
 fn id_information_notify(data: Vec<u8>) {
     info!("id information status changed {:?}", data);
+    if data[0] == 0x01 {
+        let x: u16 = (data[2] as u16) << 8 | data[1] as u16;
+        let y: u16 = (data[4] as u16) << 8 | data[3] as u16;
+        let d: u16 = (data[6] as u16) << 8 | data[5] as u16;
+        println!("({}, {}) {}", x, y, d);
+    }
 }
 
 // Connect by ref_id (paired cube)
