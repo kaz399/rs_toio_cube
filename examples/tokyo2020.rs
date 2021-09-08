@@ -862,23 +862,26 @@ fn main() {
     // connect
     let mut cube: Vec<CubeInfo> = Vec::with_capacity(cube_max);
 
-    for i in 0..cube_max {
-        println!("connect cube {}", i);
-        let c = match connect_ref_id() {
-            Ok(x) => x,
+    let mut connected_cubes = 0;
+    while connected_cubes < cube_max {
+        println!("connect cube {}", connected_cubes + 1);
+        connected_cubes += match connect_ref_id() {
+            Ok(c) => {
+                let info = CubeInfo {
+                    id: connected_cubes,
+                    ble: c,
+                    action: CubeAction::GetReady1,
+                    step_count: 0,
+                    action_term: time::Duration::from_millis(0),
+                };
+                cube.push(info);
+                1
+            }
             Err(e) => {
                 error!("{}", e);
-                std::process::exit(1);
+                0
             }
         };
-        let info = CubeInfo {
-            id: i,
-            ble: c,
-            action: CubeAction::GetReady1,
-            step_count: 0,
-            action_term: time::Duration::from_millis(0),
-        };
-        cube.push(info);
     }
 
     let led_color: Vec<Vec<u8>> = vec![
@@ -888,7 +891,7 @@ fn main() {
         vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x10],
     ];
     for i in 0..cube_max {
-        // LED on 
+        // LED on
         let result = cube[i]
             .ble
             .write(CoreCubeUuidName::LightCtrl, &led_color[i % led_color.len()]);
