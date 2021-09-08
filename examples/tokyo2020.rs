@@ -690,7 +690,7 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
 }
 
 fn send_commnand_to_cube(cube: &mut CubeInfo, control: &CubeControl, default_action_term_ms: u64) {
-    println!("{:?}", control.command);
+    info!("{:?}", control.command);
     match control.command {
         CubeCommand::Move => {
             if let Some(data) = &control.data {
@@ -703,17 +703,16 @@ fn send_commnand_to_cube(cube: &mut CubeInfo, control: &CubeControl, default_act
             cube.step_count += 1;
             if let Some(action_term_ms) = control.term_ms {
                 cube.action_term = time::Duration::from_millis(action_term_ms);
-                println!("action_term_ms");
+                debug!("action_term_ms");
             } else {
                 cube.action_term = time::Duration::from_millis(default_action_term_ms);
-                println!("default_action_term_ms");
+                debug!("default_action_term_ms");
             }
         }
         CubeCommand::MoveTo => {
             if !MAT_ENABLE.get().unwrap() {
                 return;
             }
-            println!("MoveTo");
             if let Some(data) = &control.data {
                 let timeout = data[0];
                 let moving_type = data[1];
@@ -740,7 +739,7 @@ fn send_commnand_to_cube(cube: &mut CubeInfo, control: &CubeControl, default_act
                     degree_l,
                     degree_u,
                 ];
-                println!("{:?}", ble_data);
+                debug!("{:?}", ble_data);
                 let result = cube.ble.write(CoreCubeUuidName::MotorCtrl, &ble_data);
                 assert_eq!(result.unwrap(), true);
             }
@@ -1010,13 +1009,13 @@ fn main() {
         } else {
             let mut max_action_term = time::Duration::from_millis(0);
             for cube_info in &cube {
-                println!(
+                debug!(
                     "  cube {} action_term {:?}",
                     cube_info.id, cube_info.action_term
                 );
                 max_action_term = cmp::max(max_action_term, cube_info.action_term);
             }
-            println!("max_action_term {:?}", max_action_term);
+            info!("max_action_term {:?}", max_action_term);
 
             if max_action_term > time::Duration::from_millis(0) {
                 thread::sleep(max_action_term);
