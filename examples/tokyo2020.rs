@@ -4,6 +4,7 @@ use ctrlc;
 use env_logger;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
+use once_cell::sync::OnceCell;
 use rand::Rng;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -11,6 +12,11 @@ use std::{cmp, thread, time};
 
 const MOTOR_FW: u8 = 0x01;
 const MOTOR_RV: u8 = 0x02;
+
+const CIRCLE_TERM_MS: u64 = 7500;
+
+static MAT_OFFSET_X: OnceCell<isize> = OnceCell::new();
+static MAT_OFFSET_Y: OnceCell<isize> = OnceCell::new();
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum ButtonStatus {
@@ -57,10 +63,12 @@ enum CubeAction {
     SwingL,
     Step2,
     Step4,
+    Step8,
     StepRL2,
     RollingR,
     RollingL,
     GetReady1,
+    GetReady1Short,
     GetReady2,
     ByeBye,
     Circle1,
@@ -100,7 +108,6 @@ struct CubeInfo {
     step_count: usize,
     action_term: time::Duration,
 }
-
 
 #[derive(Debug, Copy, Clone)]
 struct ButtonInfo {
@@ -318,33 +325,56 @@ fn get_next_cube_action() -> CubeAction {
 fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeControl> {
     let motor_duration = ((max_duration * 4) / 5) as u8;
     let control = match cube.action {
-        CubeAction::GetReady1 => {
-            let speed: u8 = 80;
+        CubeAction::GetReady1 | CubeAction::GetReady1Short => {
             let x = match cube.id % 2 {
-                0 => 1000 + 195,
-                1 => 1000 + 305,
-                _ => 1000 + 300,
+                0 => MAT_OFFSET_X.get().unwrap() + 200,
+                1 => MAT_OFFSET_X.get().unwrap() + 300,
+                _ => MAT_OFFSET_X.get().unwrap() + 250,
             };
             let x_upper = (x / 256) as u8;
             let x_lower = (x % 256) as u8;
+
+            let y = match cube.action {
+                CubeAction::GetReady1 => MAT_OFFSET_Y.get().unwrap() + 200,
+                CubeAction::GetReady1Short => MAT_OFFSET_Y.get().unwrap() + 220,
+                _ => MAT_OFFSET_Y.get().unwrap() + 30,
+            };
+            let y_upper = (y / 256) as u8;
+            let y_lower = (y % 256) as u8;
+
+            let speed = match cube.action {
+                CubeAction::GetReady1 => 80,
+                CubeAction::GetReady1Short => 30,
+                _ => 30,
+            };
+            let term_ms = match cube.action {
+                CubeAction::GetReady1 => 4000,
+                CubeAction::GetReady1Short => 400,
+                _ => 1500,
+            };
+            let moving_type = match cube.action {
+                CubeAction::GetReady1 => 3,
+                CubeAction::GetReady1Short => 0,
+                _ => 0,
+            };
             match cube.step_count {
                 0 => CubeControl {
                     command: CubeCommand::MoveTo,
-                    term_ms: Some(5000),
-                    data: Some(vec![4, 0, speed, 3, x_lower, x_upper, 190, 0, 90, 0]),
+                    term_ms: Some(term_ms),
+                    data: Some(vec![4, 0, speed, moving_type, x_lower, x_upper, y_lower, y_upper, 90, 0]),
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
-        CubeAction::Circle1=> {
+        CubeAction::Circle1 => {
             let speed: u8 = 50;
             let mut speed_r = speed;
             let mut speed_l = speed;
-            if cube.id % 2 == 0 {
-                speed_l -= 9;
+            if cube.id == 0 {
+                speed_l -= 8;
             } else {
                 speed_l = 0;
                 speed_r = 0;
@@ -353,63 +383,90 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
             match cube.step_count {
                 0 => CubeControl {
                     command: CubeCommand::Move,
-                    term_ms: Some(6500),
+                    term_ms: Some(CIRCLE_TERM_MS),
                     data: Some(vec![MOTOR_FW, speed_l, MOTOR_FW, speed_r, 0]),
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
-        CubeAction::Circle2=> {
+        CubeAction::Circle2 => {
             let speed: u8 = 50;
             let mut speed_r = speed;
             let mut speed_l = speed;
-            if cube.id % 2 == 0 {
+            if cube.id == 1 {
+                speed_r -= 8;
+            } else {
                 speed_l = 0;
                 speed_r = 0;
-            } else {
-                speed_r -= 9;
             }
-
             match cube.step_count {
                 0 => CubeControl {
                     command: CubeCommand::Move,
-                    term_ms: Some(6500),
+                    term_ms: Some(CIRCLE_TERM_MS - 100),
                     data: Some(vec![MOTOR_FW, speed_l, MOTOR_FW, speed_r, 0]),
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
         CubeAction::ByeBye => {
             println!("{}", cube.step_count);
-            let speed: u8 = 20;
-            if cube.step_count >= 50 {
-                return None;
-            }
-            match cube.step_count % 2 {
+            let speed: u8 = 30;
+            let state = match cube.step_count {
+                0..=19 => cube.step_count % 2,
+                _ => cube.step_count - 19,
+            };
+
+            let x = match cube.id % 2 {
+                0 => MAT_OFFSET_X.get().unwrap() + 80,
+                1 => MAT_OFFSET_X.get().unwrap() + 420,
+                _ => MAT_OFFSET_X.get().unwrap() + 250,
+            };
+            let x_upper = (x / 256) as u8;
+            let x_lower = (x % 256) as u8;
+
+            let y = MAT_OFFSET_Y.get().unwrap() + 70;
+            let y_upper = (y / 256) as u8;
+            let y_lower = (y % 256) as u8;
+
+            let d = 270;
+            let d_upper = (d / 256) as u8;
+            let d_lower = (d % 256) as u8;
+
+            match state {
                 0 => CubeControl {
                     command: CubeCommand::Move,
-                    term_ms: Some(10),
+                    term_ms: Some(100),
                     data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed, 0]),
                 },
                 1 => CubeControl {
                     command: CubeCommand::Move,
-                    term_ms: Some(10),
+                    term_ms: Some(100),
                     data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed, 0]),
+                },
+                2 => CubeControl {
+                    command: CubeCommand::Move,
+                    term_ms: Some(30),
+                    data: Some(vec![MOTOR_RV, 0, MOTOR_RV, 0, 0]),
+                },
+                3 => CubeControl {
+                    command: CubeCommand::MoveTo,
+                    term_ms: Some(5000),
+                    data: Some(vec![4, 0, 80, 3, x_lower, x_upper, y_lower, y_upper, d_lower, d_upper]),
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
         CubeAction::GetReady2 => {
-            let speed: u8 =30;
+            let speed: u8 = 30;
             match cube.step_count {
                 0 => CubeControl {
                     command: CubeCommand::Move,
@@ -420,16 +477,16 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                     command: CubeCommand::Move,
                     // Turn Left
                     data: Some(vec![MOTOR_RV, 15, MOTOR_FW, 15, 55]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 2 => CubeControl {
                     command: CubeCommand::Nothing,
                     term_ms: Some(2000),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
@@ -439,16 +496,16 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 | 3 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed, MOTOR_RV, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 1 | 2 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed, MOTOR_FW, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
@@ -458,16 +515,16 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 | 3 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed, MOTOR_FW, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 1 | 2 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed, MOTOR_RV, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
@@ -477,16 +534,16 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 | 3 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 1 | 2 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
@@ -496,16 +553,35 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 | 1 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 2 | 3 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
+                },
+            }
+        }
+        CubeAction::Step8 => {
+            let speed: u8 = 20;
+            match cube.step_count {
+                0 | 1 | 2 | 3 => CubeControl {
+                    command: CubeCommand::Move,
+                    data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed, motor_duration]),
+                    ..CubeControl::default()
+                },
+                4 | 5 | 6 | 7 => CubeControl {
+                    command: CubeCommand::Move,
+                    data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed, motor_duration]),
+                    ..CubeControl::default()
+                },
+                _ => CubeControl {
+                    command: CubeCommand::End,
+                    ..CubeControl::default()
                 },
             }
         }
@@ -515,26 +591,26 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 | 3 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed, MOTOR_FW, speed / 2, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 1 | 2 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed / 2, MOTOR_FW, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 4 | 7 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed / 2, MOTOR_RV, speed, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 5 | 6 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed, MOTOR_RV, speed / 2, motor_duration]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
@@ -545,15 +621,15 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_FW, speed, MOTOR_RV, speed, full_time]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 1 | 2 | 3 => CubeControl {
                     command: CubeCommand::Nothing,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
@@ -564,25 +640,25 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 => CubeControl {
                     command: CubeCommand::Move,
                     data: Some(vec![MOTOR_RV, speed, MOTOR_FW, speed, full_time]),
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 1 | 2 | 3 => CubeControl {
                     command: CubeCommand::Nothing,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
-                    .. CubeControl::default()
+                    ..CubeControl::default()
                 },
             }
         }
-        _ => {
-            CubeControl { .. CubeControl::default() }
-        }
+        _ => CubeControl {
+            ..CubeControl::default()
+        },
     };
 
     match control.command {
-        CubeCommand::End  => None,
+        CubeCommand::End => None,
         _ => Some(control),
     }
 }
@@ -595,8 +671,8 @@ fn send_commnand_to_cube(cube: &mut CubeInfo, control: &CubeControl, default_act
                 let ble_data: Vec<u8> = vec![
                     0x02, 0x01, data[0], data[1], 0x02, data[2], data[3], data[4],
                 ];
-                    let result = cube.ble.write(CoreCubeUuidName::MotorCtrl, &ble_data);
-                    assert_eq!(result.unwrap(), true);
+                let result = cube.ble.write(CoreCubeUuidName::MotorCtrl, &ble_data);
+                assert_eq!(result.unwrap(), true);
             }
             cube.step_count += 1;
             if let Some(action_term_ms) = control.term_ms {
@@ -683,20 +759,21 @@ fn main() {
         )
         .arg(
             Arg::with_name("cube")
-                .help("total cube")
+                .help("max cube number")
                 .long("cube")
                 .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("mat")
+                .help("mat type")
+                .long("mat")
+                .takes_value(true)
+                .possible_values(&["tc1", "tc2", "gesun", "none"])
+                .default_value("none"),
         );
 
     // Parse arguments
     let matches = app.get_matches();
-    if matches.is_present("aaa") {
-        println!("option aaa");
-    } else if matches.is_present("bbb") {
-        println!("option bbb");
-    } else {
-        println!("no option");
-    }
 
     let mut default_action_term_ms: u64 = 600;
     if let Some(tempo_str) = matches.value_of("tempo") {
@@ -707,7 +784,10 @@ fn main() {
                 120
             }
         };
-        println!("tempo {} (default_action_term_ms:{}[ms])", tempo_str, default_action_term_ms);
+        println!(
+            "tempo {} (default_action_term_ms:{}[ms])",
+            tempo_str, default_action_term_ms
+        );
     }
 
     let mut cube_max: usize = 1;
@@ -721,6 +801,25 @@ fn main() {
         };
         println!("using {} cubes", cube_max);
     }
+
+    match matches.value_of("mat").unwrap() {
+        "tc1" => {
+            MAT_OFFSET_X.set(0).unwrap();
+            MAT_OFFSET_Y.set(0).unwrap();
+        }
+        "tc2" => {
+            MAT_OFFSET_X.set(500).unwrap();
+            MAT_OFFSET_Y.set(0).unwrap();
+        }
+        "gesun" => {
+            MAT_OFFSET_X.set(1000).unwrap();
+            MAT_OFFSET_Y.set(0).unwrap();
+        }
+        _ => {
+            MAT_OFFSET_X.set(-1).unwrap();
+            MAT_OFFSET_Y.set(-1).unwrap();
+        }
+    };
 
     // connect
     let mut cube: Vec<CubeInfo> = Vec::with_capacity(cube_max);
@@ -770,15 +869,21 @@ fn main() {
     }
 
     // Set collision detection level: Level 10
-    let result = cube[0].ble.write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
+    let result = cube[0]
+        .ble
+        .write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
     assert_eq!(result.unwrap(), true);
 
     // Set double-tap detection time: Level 2
-    let result = cube[0].ble.write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
+    let result = cube[0]
+        .ble
+        .write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
     assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
-    let result = cube[0].ble.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
+    let result = cube[0]
+        .ble
+        .register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
     let button_handler = result.unwrap();
 
     let result = cube[0].ble.register_norify(
@@ -787,7 +892,9 @@ fn main() {
     );
     let sensor_handler = result.unwrap();
 
-    let result = cube[0].ble.register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
+    let result = cube[0]
+        .ble
+        .register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
     let id_handler = result.unwrap();
 
     // Register Ctrl-C handler
@@ -808,33 +915,68 @@ fn main() {
         cube_max_duration, cube_motor_duration
     );
 
+    let action_list = [
+        [CubeAction::GetReady1, CubeAction::GetReady1],
+        [CubeAction::Circle1, CubeAction::Circle1],
+        [CubeAction::GetReady1Short, CubeAction::GetReady1Short],
+        [CubeAction::Circle2, CubeAction::Circle2],
+        [CubeAction::GetReady1Short, CubeAction::GetReady1Short],
+        [CubeAction::SwingR, CubeAction::SwingL],
+        [CubeAction::Step2, CubeAction::Step2],
+        [CubeAction::RollingR, CubeAction::RollingR],
+        [CubeAction::RollingL, CubeAction::RollingL],
+        [CubeAction::GetReady1Short, CubeAction::GetReady1Short],
+        [CubeAction::StepRL2, CubeAction::StepRL2],
+        [CubeAction::Step8, CubeAction::Step8],
+        [CubeAction::RollingL, CubeAction::RollingR],
+        [CubeAction::RollingR, CubeAction::RollingL],
+        [CubeAction::GetReady1Short, CubeAction::GetReady1Short],
+        [CubeAction::ByeBye, CubeAction::ByeBye],
+    ];
+
+    let mut action_count = 0;
     while running.load(Ordering::SeqCst) {
+        let mut next_action: bool = false;
         for i in 0..cube_max {
             loop {
-                let motor_control_data: Option<CubeControl> = get_cube_control_data(&cube[i], cube_max_duration);
+                let motor_control_data: Option<CubeControl> =
+                    get_cube_control_data(&cube[i], cube_max_duration);
                 if let Some(control) = motor_control_data {
                     send_commnand_to_cube(&mut cube[i], &control, default_action_term_ms);
                     break;
                 } else {
-                    cube[i].step_count = 0;
-                    cube[i].action = match cube[i].action {
-                        CubeAction::GetReady1 => CubeAction::Circle1,
-                        CubeAction::Circle1 => CubeAction::Circle2,
-                        _ => get_next_cube_action(),
-                    };
-                    println!("cube {} next action {:?}", cube[i].id, cube[i].action);
+                    next_action = true;
+                    break;
                 }
             }
         }
-        let mut max_action_term = time::Duration::from_millis(0);
-        for cube_info in &cube {
-            println!("  cube {} action_term {:?}", cube_info.id, cube_info.action_term);
-            max_action_term = cmp::max(max_action_term, cube_info.action_term);
-        }
-        println!("max_action_term {:?}", max_action_term);
 
-        if max_action_term > time::Duration::from_millis(0) {
-            thread::sleep(max_action_term);
+        if next_action {
+            action_count += 1;
+            if action_count >= action_list.len() {
+                break;
+            }
+            for i in 0..cube_max {
+                cube[i].step_count = 0;
+                cube[i].action = action_list[action_count][i];
+            }
+            println!("cube 0 next {:?}, cube 1 next {:?}",
+             cube[0].action,
+             cube[1].action);
+        } else {
+            let mut max_action_term = time::Duration::from_millis(0);
+            for cube_info in &cube {
+                println!(
+                    "  cube {} action_term {:?}",
+                    cube_info.id, cube_info.action_term
+                );
+                max_action_term = cmp::max(max_action_term, cube_info.action_term);
+            }
+            println!("max_action_term {:?}", max_action_term);
+
+            if max_action_term > time::Duration::from_millis(0) {
+                thread::sleep(max_action_term);
+            }
         }
     }
     // --------------------------------------------------------------------------------
