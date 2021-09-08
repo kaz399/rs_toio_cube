@@ -197,7 +197,7 @@ fn connect_ref_id() -> std::result::Result<CoreCubeBLE, String> {
 fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
     loop {
         let mut cube = CoreCubeBLE::new("Cube1".to_string());
-        println!("search registered cubes");
+        println!("connect to cube {:#08x}", address);
         'connect_again: loop {
             let result = cube.connect(address);
             match result.unwrap() {

@@ -260,7 +260,7 @@ fn connect_ref_id() -> std::result::Result<CoreCubeBLE, String> {
 fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
     loop {
         let mut cube = CoreCubeBLE::new("Cube1".to_string());
-        println!("search registered cubes");
+        println!("connect to {:#08x}", address);
         'connect_again: loop {
             let result = cube.connect(address);
             match result.unwrap() {
@@ -333,17 +333,17 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
             let x = match cube.id % 4 {
                 0 => MAT_OFFSET_X.get().unwrap() + 200,
                 1 => MAT_OFFSET_X.get().unwrap() + 300,
-                2 => MAT_OFFSET_X.get().unwrap() + 150,
-                3 => MAT_OFFSET_X.get().unwrap() + 350,
+                2 => MAT_OFFSET_X.get().unwrap() + 140,
+                3 => MAT_OFFSET_X.get().unwrap() + 360,
                 _ => MAT_OFFSET_X.get().unwrap() + 250,
             };
             let x_upper = (x / 256) as u8;
             let x_lower = (x % 256) as u8;
 
-            let y_offset = (cube.id / 2) * 50;
+            let y_offset = (cube.id / 2) * 30;
             let y = match cube.action {
-                CubeAction::GetReady1 => MAT_OFFSET_Y.get().unwrap() + 200 + y_offset,
-                CubeAction::GetReady1Short => MAT_OFFSET_Y.get().unwrap() + 220 + y_offset,
+                CubeAction::GetReady1 => MAT_OFFSET_Y.get().unwrap() + 190 + y_offset,
+                CubeAction::GetReady1Short => MAT_OFFSET_Y.get().unwrap() + 210 + y_offset,
                 _ => MAT_OFFSET_Y.get().unwrap() + 230 + y_offset,
             };
             let y_upper = (y / 256) as u8;
@@ -436,7 +436,6 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
             if !MAT_ENABLE.get().unwrap() {
                 return None;
             }
-            println!("{}", cube.step_count);
             let speed: u8 = 30;
             let state = match cube.step_count {
                 0..=19 => cube.step_count % 2,
@@ -781,6 +780,7 @@ fn main() {
     // Set command line options
     let app = App::new("example")
         .version("0.0.1")
+        .arg(Arg::with_name("random").help("option a").long("random"))
         .arg(
             Arg::with_name("tempo")
                 .help("tempo")
@@ -804,6 +804,11 @@ fn main() {
 
     // Parse arguments
     let matches = app.get_matches();
+
+    let random_mode = matches.is_present("random");
+    if random_mode {
+        println!("random mode");
+    }
 
     let mut default_action_term_ms: u64 = 600;
     if let Some(tempo_str) = matches.value_of("tempo") {
@@ -836,19 +841,19 @@ fn main() {
         "tc1" => {
             println!("Use toio collection mat (circle side)");
             MAT_ENABLE.set(true).unwrap();
-            MAT_OFFSET_X.set(0).unwrap();
+            MAT_OFFSET_X.set(3).unwrap();
             MAT_OFFSET_Y.set(0).unwrap();
         }
         "tc2" => {
             println!("Use toio collection mat (checker side)");
             MAT_ENABLE.set(true).unwrap();
-            MAT_OFFSET_X.set(500).unwrap();
+            MAT_OFFSET_X.set(503).unwrap();
             MAT_OFFSET_Y.set(0).unwrap();
         }
         "gesun" => {
             println!("Use gesundroiod mat");
             MAT_ENABLE.set(true).unwrap();
-            MAT_OFFSET_X.set(1000).unwrap();
+            MAT_OFFSET_X.set(1003).unwrap();
             MAT_OFFSET_Y.set(0).unwrap();
         }
         _ => {
@@ -888,7 +893,7 @@ fn main() {
         vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x10],
         vec![0x03, 0x00, 0x01, 0x01, 0x10, 0x00, 0x00],
         vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
-        vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x10],
+        vec![0x03, 0x00, 0x01, 0x01, 0x10, 0x10, 0x00],
     ];
     for i in 0..cube_max {
         // LED on
@@ -982,13 +987,21 @@ fn main() {
         }
 
         if next_action {
-            action_count += 1;
-            if action_count >= action_list.len() {
-                break;
-            }
-            for i in 0..cube_max {
-                cube[i].step_count = 0;
-                cube[i].action = action_list[action_count][i % 2];
+            if random_mode {
+                let next_action = get_next_cube_action();
+                for i in 0..cube_max {
+                    cube[i].step_count = 0;
+                    cube[i].action = next_action;
+                }
+             } else {
+                action_count += 1;
+                if action_count >= action_list.len() {
+                    break;
+                }
+                for i in 0..cube_max {
+                    cube[i].step_count = 0;
+                    cube[i].action = action_list[action_count][i % 2];
+                }
             }
             println!(
                 "cube 0 next {:?}, cube 1 next {:?}",
