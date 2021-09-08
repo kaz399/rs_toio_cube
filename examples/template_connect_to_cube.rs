@@ -43,7 +43,7 @@ enum PostureStatus {
     Reverse = 2,
     Downward = 3,
     Upward = 4,
-    RigitSideUp = 5,
+    RightSideUp = 5,
     LeftSideUp = 6,
 }
 
@@ -131,7 +131,7 @@ fn get_sensor_info(data: Vec<u8>) -> SensorInfo {
             0x02 => PostureStatus::Reverse,
             0x03 => PostureStatus::Downward,
             0x04 => PostureStatus::Upward,
-            0x05 => PostureStatus::RigitSideUp,
+            0x05 => PostureStatus::RightSideUp,
             0x06 => PostureStatus::LeftSideUp,
             _ => PostureStatus::Unknown,
         },

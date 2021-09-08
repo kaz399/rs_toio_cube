@@ -15,8 +15,9 @@ const MOTOR_RV: u8 = 0x02;
 
 const CIRCLE_TERM_MS: u64 = 7500;
 
-static MAT_OFFSET_X: OnceCell<isize> = OnceCell::new();
-static MAT_OFFSET_Y: OnceCell<isize> = OnceCell::new();
+static MAT_ENABLE: OnceCell<bool> = OnceCell::new();
+static MAT_OFFSET_X: OnceCell<usize> = OnceCell::new();
+static MAT_OFFSET_Y: OnceCell<usize> = OnceCell::new();
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum ButtonStatus {
@@ -326,18 +327,24 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
     let motor_duration = ((max_duration * 4) / 5) as u8;
     let control = match cube.action {
         CubeAction::GetReady1 | CubeAction::GetReady1Short => {
-            let x = match cube.id % 2 {
+            if !MAT_ENABLE.get().unwrap() {
+                return None;
+            }
+            let x = match cube.id % 4 {
                 0 => MAT_OFFSET_X.get().unwrap() + 200,
                 1 => MAT_OFFSET_X.get().unwrap() + 300,
+                2 => MAT_OFFSET_X.get().unwrap() + 150,
+                3 => MAT_OFFSET_X.get().unwrap() + 350,
                 _ => MAT_OFFSET_X.get().unwrap() + 250,
             };
             let x_upper = (x / 256) as u8;
             let x_lower = (x % 256) as u8;
 
+            let y_offset = (cube.id / 2) * 50;
             let y = match cube.action {
-                CubeAction::GetReady1 => MAT_OFFSET_Y.get().unwrap() + 200,
-                CubeAction::GetReady1Short => MAT_OFFSET_Y.get().unwrap() + 220,
-                _ => MAT_OFFSET_Y.get().unwrap() + 30,
+                CubeAction::GetReady1 => MAT_OFFSET_Y.get().unwrap() + 200 + y_offset,
+                CubeAction::GetReady1Short => MAT_OFFSET_Y.get().unwrap() + 220 + y_offset,
+                _ => MAT_OFFSET_Y.get().unwrap() + 230 + y_offset,
             };
             let y_upper = (y / 256) as u8;
             let y_lower = (y % 256) as u8;
@@ -361,7 +368,18 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 0 => CubeControl {
                     command: CubeCommand::MoveTo,
                     term_ms: Some(term_ms),
-                    data: Some(vec![4, 0, speed, moving_type, x_lower, x_upper, y_lower, y_upper, 90, 0]),
+                    data: Some(vec![
+                        4,
+                        0,
+                        speed,
+                        moving_type,
+                        x_lower,
+                        x_upper,
+                        y_lower,
+                        y_upper,
+                        90,
+                        0,
+                    ]),
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
@@ -415,6 +433,9 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
             }
         }
         CubeAction::ByeBye => {
+            if !MAT_ENABLE.get().unwrap() {
+                return None;
+            }
             println!("{}", cube.step_count);
             let speed: u8 = 30;
             let state = match cube.step_count {
@@ -430,7 +451,11 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
             let x_upper = (x / 256) as u8;
             let x_lower = (x % 256) as u8;
 
-            let y = MAT_OFFSET_Y.get().unwrap() + 70;
+            let y = match cube.id % 4 {
+                0 | 1 => MAT_OFFSET_Y.get().unwrap() + 70,
+                2 | 3 => MAT_OFFSET_Y.get().unwrap() + 430,
+                _ => MAT_OFFSET_Y.get().unwrap() + 200,
+            };
             let y_upper = (y / 256) as u8;
             let y_lower = (y % 256) as u8;
 
@@ -457,7 +482,9 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 3 => CubeControl {
                     command: CubeCommand::MoveTo,
                     term_ms: Some(5000),
-                    data: Some(vec![4, 0, 80, 3, x_lower, x_upper, y_lower, y_upper, d_lower, d_upper]),
+                    data: Some(vec![
+                        4, 0, 80, 3, x_lower, x_upper, y_lower, y_upper, d_lower, d_upper,
+                    ]),
                 },
                 _ => CubeControl {
                     command: CubeCommand::End,
@@ -684,6 +711,9 @@ fn send_commnand_to_cube(cube: &mut CubeInfo, control: &CubeControl, default_act
             }
         }
         CubeCommand::MoveTo => {
+            if !MAT_ENABLE.get().unwrap() {
+                return;
+            }
             println!("MoveTo");
             if let Some(data) = &control.data {
                 let timeout = data[0];
@@ -804,20 +834,28 @@ fn main() {
 
     match matches.value_of("mat").unwrap() {
         "tc1" => {
+            println!("Use toio collection mat (circle side)");
+            MAT_ENABLE.set(true).unwrap();
             MAT_OFFSET_X.set(0).unwrap();
             MAT_OFFSET_Y.set(0).unwrap();
         }
         "tc2" => {
+            println!("Use toio collection mat (checker side)");
+            MAT_ENABLE.set(true).unwrap();
             MAT_OFFSET_X.set(500).unwrap();
             MAT_OFFSET_Y.set(0).unwrap();
         }
         "gesun" => {
+            println!("Use gesundroiod mat");
+            MAT_ENABLE.set(true).unwrap();
             MAT_OFFSET_X.set(1000).unwrap();
             MAT_OFFSET_Y.set(0).unwrap();
         }
         _ => {
-            MAT_OFFSET_X.set(-1).unwrap();
-            MAT_OFFSET_Y.set(-1).unwrap();
+            println!("Without mat mode");
+            MAT_ENABLE.set(true).unwrap();
+            MAT_OFFSET_X.set(0).unwrap();
+            MAT_OFFSET_Y.set(0).unwrap();
         }
     };
 
@@ -843,42 +881,31 @@ fn main() {
         cube.push(info);
     }
 
-    // LED on (blue)
-    let result = cube[0].ble.write(
-        CoreCubeUuidName::LightCtrl,
-        &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x10],
-    );
-    assert_eq!(result.unwrap(), true);
+    let led_color: Vec<Vec<u8>> = vec![
+        vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x00, 0x10],
+        vec![0x03, 0x00, 0x01, 0x01, 0x10, 0x00, 0x00],
+        vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
+        vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x10],
+    ];
+    for i in 0..cube_max {
+        // LED on 
+        let result = cube[i]
+            .ble
+            .write(CoreCubeUuidName::LightCtrl, &led_color[i % led_color.len()]);
+        assert_eq!(result.unwrap(), true);
 
-    // cube2: LED on (red)
-    if cube_max >= 2 {
-        let result = cube[1].ble.write(
-            CoreCubeUuidName::LightCtrl,
-            &vec![0x03, 0x00, 0x01, 0x01, 0x10, 0x00, 0x00],
-        );
+        // Set collision detection level: Level 10
+        let result = cube[i]
+            .ble
+            .write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
+        assert_eq!(result.unwrap(), true);
+
+        // Set double-tap detection time: Level 2
+        let result = cube[i]
+            .ble
+            .write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
         assert_eq!(result.unwrap(), true);
     }
-
-    // cube3: LED on (green)
-    if cube_max >= 3 {
-        let result = cube[2].ble.write(
-            CoreCubeUuidName::LightCtrl,
-            &vec![0x03, 0x00, 0x01, 0x01, 0x00, 0x10, 0x00],
-        );
-        assert_eq!(result.unwrap(), true);
-    }
-
-    // Set collision detection level: Level 10
-    let result = cube[0]
-        .ble
-        .write(CoreCubeUuidName::Configuration, &vec![0x06, 0x00, 0x0a]);
-    assert_eq!(result.unwrap(), true);
-
-    // Set double-tap detection time: Level 2
-    let result = cube[0]
-        .ble
-        .write(CoreCubeUuidName::Configuration, &vec![0x17, 0x00, 0x04]);
-    assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
     let result = cube[0]
@@ -958,11 +985,12 @@ fn main() {
             }
             for i in 0..cube_max {
                 cube[i].step_count = 0;
-                cube[i].action = action_list[action_count][i];
+                cube[i].action = action_list[action_count][i % 2];
             }
-            println!("cube 0 next {:?}, cube 1 next {:?}",
-             cube[0].action,
-             cube[1].action);
+            println!(
+                "cube 0 next {:?}, cube 1 next {:?}",
+                cube[0].action, cube[1].action
+            );
         } else {
             let mut max_action_term = time::Duration::from_millis(0);
             for cube_info in &cube {
