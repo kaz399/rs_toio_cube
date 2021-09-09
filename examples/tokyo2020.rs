@@ -80,7 +80,6 @@ enum CubeAction {
 enum CubeCommand {
     Move,
     MoveTo,
-    MoveToMulti,
     Nothing,
     End,
 }
@@ -257,7 +256,7 @@ fn connect_ref_id() -> std::result::Result<CoreCubeBLE, String> {
 }
 
 // Connect by address
-fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
+fn connect_ble_address(address: u64) -> std::result::Result<CoreCubeBLE, String> {
     loop {
         let mut cube = CoreCubeBLE::new("Cube1".to_string());
         println!("connect to {:#08x}", address);
@@ -285,6 +284,14 @@ fn connect(address: u64) -> std::result::Result<CoreCubeBLE, String> {
                 }
             }
         }
+    }
+}
+
+fn connect(param: Option<u64>) -> std::result::Result<CoreCubeBLE, String> {
+    if let Some(address) = param {
+        connect_ble_address(address)
+    } else {
+        connect_ref_id()
     }
 }
 
@@ -678,9 +685,6 @@ fn get_cube_control_data(cube: &CubeInfo, max_duration: u64) -> Option<CubeContr
                 },
             }
         }
-        _ => CubeControl {
-            ..CubeControl::default()
-        },
     };
 
     match control.command {
@@ -744,14 +748,6 @@ fn send_commnand_to_cube(cube: &mut CubeInfo, control: &CubeControl, default_act
                 assert_eq!(result.unwrap(), true);
             }
             cube.step_count += 1;
-            if let Some(action_term_ms) = control.term_ms {
-                cube.action_term = time::Duration::from_millis(action_term_ms);
-            } else {
-                cube.action_term = time::Duration::from_millis(default_action_term_ms);
-            }
-        }
-        CubeCommand::MoveToMulti => {
-            cube.step_count = 0;
             if let Some(action_term_ms) = control.term_ms {
                 cube.action_term = time::Duration::from_millis(action_term_ms);
             } else {
@@ -869,7 +865,7 @@ fn main() {
     let mut connected_cubes = 0;
     while connected_cubes < cube_max {
         println!("connect cube {}", connected_cubes + 1);
-        connected_cubes += match connect_ref_id() {
+        connected_cubes += match connect(None) {
             Ok(c) => {
                 let info = CubeInfo {
                     id: connected_cubes,
@@ -992,7 +988,7 @@ fn main() {
                     cube[i].step_count = 0;
                     cube[i].action = next_action;
                 }
-             } else {
+            } else {
                 action_count += 1;
                 if action_count >= action_list.len() {
                     break;
@@ -1002,10 +998,11 @@ fn main() {
                     cube[i].action = action_list[action_count][i % 2];
                 }
             }
-            println!(
-                "cube 0 next {:?}, cube 1 next {:?}",
-                cube[0].action, cube[1].action
-            );
+
+            for i in 0..cube_max {
+                print!(" cube {} {:?},", i, cube[i].action);
+            }
+            println!("");
         } else {
             let mut max_action_term = time::Duration::from_millis(0);
             for cube_info in &cube {
