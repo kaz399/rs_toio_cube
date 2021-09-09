@@ -44,7 +44,7 @@ enum PostureStatus {
     Reverse = 2,
     Downward = 3,
     Upward = 4,
-    RigitSideUp = 5,
+    RightSideUp = 5,
     LeftSideUp = 6,
 }
 
@@ -113,7 +113,7 @@ fn button_notify(data: Vec<u8>) {
     }
 }
 
-// Sensor Notify Hander
+// Sensor Notify Handler
 fn sensor_information_notify(data: Vec<u8>) {
     debug!("sensor information status changed {:?}", data);
 
@@ -142,7 +142,7 @@ fn sensor_information_notify(data: Vec<u8>) {
                 0x02 => PostureStatus::Reverse,
                 0x03 => PostureStatus::Downward,
                 0x04 => PostureStatus::Upward,
-                0x05 => PostureStatus::RigitSideUp,
+                0x05 => PostureStatus::RightSideUp,
                 0x06 => PostureStatus::LeftSideUp,
                 _ => PostureStatus::Unknown,
             },
@@ -168,7 +168,7 @@ fn connect_ref_id() -> std::result::Result<CoreCubeBLE, String> {
         println!("search registered cubes");
         let dev_list = get_ble_devices().unwrap();
         if dev_list.len() == 0 {
-            return Err("failed to conenct".to_string());
+            return Err("failed to connect".to_string());
         }
 
         'search_next: for device_info in &dev_list {
@@ -489,13 +489,13 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
-    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
+    let result = cube.register_notify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
     let button_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify));
+    let result = cube.register_notify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify));
     let sensor_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
+    let result = cube.register_notify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
     let id_handler = result.unwrap();
 
     // Register Ctrl-C handler

@@ -160,7 +160,7 @@ fn connect_ref_id() -> std::result::Result<CoreCubeBLE, String> {
         println!("search registered cubes");
         let dev_list = get_ble_devices().unwrap();
         if dev_list.len() == 0 {
-            return Err("failed to conenct".to_string());
+            return Err("failed to connect".to_string());
         }
 
         'search_next: for device_info in &dev_list {
@@ -298,13 +298,13 @@ fn main() {
     assert_eq!(result.unwrap(), true);
 
     // Register cube notify handlers
-    let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
+    let result = cube.register_notify(CoreCubeUuidName::ButtonInfo, Box::new(button_notify));
     let button_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify_1));
+    let result = cube.register_notify(CoreCubeUuidName::SensorInfo, Box::new(sensor_information_notify_1));
     let sensor_handler = result.unwrap();
 
-    let result = cube.register_norify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
+    let result = cube.register_notify(CoreCubeUuidName::IdInfo, Box::new(id_information_notify));
     let id_handler = result.unwrap();
 
     // Register Ctrl-C handler

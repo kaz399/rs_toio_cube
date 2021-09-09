@@ -207,7 +207,7 @@ pub trait CoreCubeBLEAccess {
         bytes: &Vec<u8>,
     ) -> std::result::Result<bool, String>;
 
-    fn register_norify(
+    fn register_notify(
         &self,
         characteristic_name: CoreCubeUuidName,
         handler_func: CoreCubeNotifyHandlerFunction,
@@ -368,7 +368,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         Ok(true)
     }
 
-    fn register_norify(
+    fn register_notify(
         &self,
         characteristic_name: CoreCubeUuidName,
         handler_func: CoreCubeNotifyHandlerFunction,
@@ -502,7 +502,7 @@ mod tests {
         assert_eq!(result.unwrap(), true);
 
         println!("Notify test");
-        let result = cube.register_norify(CoreCubeUuidName::ButtonInfo, Box::new(button_handler));
+        let result = cube.register_notify(CoreCubeUuidName::ButtonInfo, Box::new(button_handler));
         let notify_handler = result.unwrap();
 
         println!("sleep2");
