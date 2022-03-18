@@ -1,15 +1,22 @@
 [package]
 name = "core_cube"
-version = "0.20.1"
+version = "0.34.0"
 authors = ["yabe_z <Kazuhiro.Yabe@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 env_logger = "0.7.1"
 log = "0.4.8"
-windows = "0.21.1"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[build-dependencies]
-windows = "0.21.1"
+[dependencies.windows]
+version = "0.34.0"
+features = [
+    "alloc",
+    "Devices_Bluetooth_Advertisement",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Devices_Bluetooth",
+    "Devices_Enumeration",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
+]

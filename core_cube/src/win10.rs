@@ -5,23 +5,18 @@ use std::fmt::{self, Debug};
 use std::sync::mpsc;
 use std::time;
 
-mod bindings {
-    ::windows::include_bindings!();
-}
-
-// Now use the `import` macro to import the desired winmd files and types:
-use bindings::{
-    Windows::Devices::Bluetooth::Advertisement::*,
-    Windows::Devices::Bluetooth::GenericAttributeProfile::*,
-    Windows::Devices::Bluetooth::*,
-    Windows::Devices::Enumeration::*,
-    Windows::Foundation::*,
-    Windows::Storage::Streams::*,
+use windows::{
+    core::*,
+    Devices::Bluetooth::Advertisement::*,
+    Devices::Bluetooth::GenericAttributeProfile::*,
+    Devices::Bluetooth::*,
+    Devices::Enumeration::*,
+    Foundation::*,
+    Storage::Streams::*,
 };
 
-use windows::{Guid, HSTRING};
 
-pub type CoreCubeNotifyHandlerFunction = Box<dyn Fn(Vec<u8>)>;
+pub type CoreCubeNotifyHandlerFunction = Box<dyn Fn(Vec<u8>) + Send>;
 
 #[derive(Debug, Copy, Clone)]
 pub enum CoreCubeUuidName {
@@ -42,30 +37,30 @@ impl fmt::Display for CoreCubeUuidName {
     }
 }
 
-pub fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
+pub fn get_uuid(name: CoreCubeUuidName) -> Option<GUID> {
     match name {
-        CoreCubeUuidName::Service => Some(Guid::from_values(
+        CoreCubeUuidName::Service => Some(GUID::from_values(
             // 10b20100-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20100,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::IdInfo => Some(Guid::from_values(
+        CoreCubeUuidName::IdInfo => Some(GUID::from_values(
             // 10b20101-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20101,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::SensorInfo => Some(Guid::from_values(
+        CoreCubeUuidName::SensorInfo => Some(GUID::from_values(
             // 10b20106-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20106,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::ButtonInfo => Some(Guid::from_values(
+        CoreCubeUuidName::ButtonInfo => Some(GUID::from_values(
             // 10b20107-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20107,
             0x5b3b,
@@ -73,35 +68,35 @@ pub fn get_uuid(name: CoreCubeUuidName) -> Option<Guid> {
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
         // Characteristic: Battery information
-        CoreCubeUuidName::BatteryInfo => Some(Guid::from_values(
+        CoreCubeUuidName::BatteryInfo => Some(GUID::from_values(
             // 10b20108-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20108,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::MotorCtrl => Some(Guid::from_values(
+        CoreCubeUuidName::MotorCtrl => Some(GUID::from_values(
             // 10b20102-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20102,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::LightCtrl => Some(Guid::from_values(
+        CoreCubeUuidName::LightCtrl => Some(GUID::from_values(
             // 10b20103-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20103,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::SoundCtrl => Some(Guid::from_values(
+        CoreCubeUuidName::SoundCtrl => Some(GUID::from_values(
             // 10b20104-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b20104,
             0x5b3b,
             0x4571,
             [0x95, 0x08, 0xcf, 0x3e, 0xfc, 0xd7, 0xbb, 0xae],
         )),
-        CoreCubeUuidName::Configuration => Some(Guid::from_values(
+        CoreCubeUuidName::Configuration => Some(GUID::from_values(
             // 10b201ff-5b3b-4571-9508-cf 3e fc d7 bb ae
             0x10b201ff,
             0x5b3b,
@@ -229,7 +224,7 @@ impl CoreCubeBLEAccess for CoreCubeBLE {
         let ref_id_hstr = HSTRING::from(ref_id_str);
         let ble_device = match BluetoothLEDevice::FromIdAsync(&ref_id_hstr).unwrap().get() {
             Ok(bdev) => bdev,
-            Err(x) => return Err(x.message()),
+            Err(x) => return Err(x.message().to_string()),
         };
 
         let connection_status = ble_device.ConnectionStatus().unwrap();
